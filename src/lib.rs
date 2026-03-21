@@ -9,7 +9,7 @@ use core::ops::{Add, AddAssign, BitOr, Div, Mul, Shl, Shr, Sub, SubAssign};
 
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
-pub struct Decimal<I: UnderlyingInt, const MIN_SCALE: i32 = 0, const MAX_SCALE: i32 = 15>(I);
+pub struct Decimal<I: UnderlyingInt>(I);
 
 // Underlying Integer
 pub trait UnderlyingInt:
@@ -25,8 +25,8 @@ pub trait UnderlyingInt:
     + Sub<Output = Self>
     + Mul<Output = Self>
     + Div<Output = Self>
-    + Shl<u32, Output = Self>
-    + Shr<u32, Output = Self>
+    + Shl<u8, Output = Self>
+    + Shr<u8, Output = Self>
     + BitOr<Output = Self>
     + AddAssign
     + SubAssign
@@ -35,13 +35,15 @@ pub trait UnderlyingInt:
     const MIN: Self;
     const ZERO: Self;
     const TEN: Self;
-    fn as_u16(self) -> u16;
-    fn from_u16(n: u16) -> Self;
+    const SCALE_BITS: u8;
+    const MAX_SCALE: u8;
+    fn as_u8(self) -> u8;
+    fn from_u8(n: u8) -> Self;
 
-    fn get_exp(i: u16) -> Option<Self>;
-    unsafe fn unchecked_get_exp(i: u16) -> Self;
+    fn get_exp(i: u8) -> Option<Self>;
+    unsafe fn unchecked_get_exp(i: u8) -> Self;
 
-    fn leading_zeros(self) -> u16;
+    fn leading_zeros(self) -> u8;
 }
 
 const ALL_EXPS: [i128; 39] = [
@@ -91,89 +93,67 @@ impl UnderlyingInt for i128 {
     const MIN: Self = Self::MIN;
     const ZERO: Self = 0;
     const TEN: Self = 10;
-    fn as_u16(self) -> u16 {
-        self as u16
+    const SCALE_BITS: u8 = 6;
+    const MAX_SCALE: u8 = 36;
+
+    fn as_u8(self) -> u8 {
+        self as u8
     }
-    fn from_u16(n: u16) -> Self {
+    fn from_u8(n: u8) -> Self {
         n as Self
     }
-    fn get_exp(i: u16) -> Option<i128> {
+    fn get_exp(i: u8) -> Option<i128> {
         ALL_EXPS.get(i as usize).copied()
     }
 
-    unsafe fn unchecked_get_exp(i: u16) -> i128 {
+    unsafe fn unchecked_get_exp(i: u8) -> i128 {
         unsafe { *ALL_EXPS.get_unchecked(i as usize) }
     }
-    fn leading_zeros(self) -> u16 {
-        self.leading_zeros() as u16
+    fn leading_zeros(self) -> u8 {
+        self.leading_zeros() as u8
     }
 }
 
-const fn ceil_log2(n: i32) -> u32 {
-    assert!(n >= 1);
-    u32::BITS - (n - 1).leading_zeros()
-}
-
-impl<I: UnderlyingInt, const MIN_SCALE: i32, const MAX_SCALE: i32>
-    Decimal<I, MIN_SCALE, MAX_SCALE>
-{
-    const SCALE_BITS: u32 = ceil_log2(MAX_SCALE - MIN_SCALE + 1);
-
+impl<I: UnderlyingInt> Decimal<I> {
     pub const ZERO: Self = Self(I::ZERO);
 
-    pub fn max() -> Self {
-        Self::pack(I::MAX << Self::SCALE_BITS, 0)
-    }
-    pub fn min() -> Self {
-        Self::pack(I::MIN << Self::SCALE_BITS, 0)
-    }
-
     pub fn mantissa(self) -> I {
-        self.0 >> Self::SCALE_BITS
+        self.0 >> I::SCALE_BITS
     }
 
-    fn raw_scale(self) -> u16 {
-        self.0.as_u16() & ((1 << Self::SCALE_BITS) - 1)
+    fn scale(self) -> u8 {
+        self.0.as_u8() & ((1 << I::SCALE_BITS) - 1)
     }
 
-    pub fn scale(self) -> i32 {
-        self.raw_scale() as i32 + MIN_SCALE
-    }
-
-    pub fn destructure(self) -> (I, i32) {
+    pub fn unpack(self) -> (I, u8) {
         (self.mantissa(), self.scale())
     }
 
-    pub fn construct(mantissa: I, scale: i32) -> Option<Self> {
+    pub fn pack(mantissa: I, scale: u8) -> Option<Self> {
         if !Self::valid_matissa(mantissa) {
             return None;
         }
-        if scale < MIN_SCALE || scale > MAX_SCALE {
+        if scale > I::MAX_SCALE {
             return None;
         }
-        let raw_scale = (scale - MIN_SCALE) as u16;
-        Some(Self::pack(mantissa, raw_scale))
+        Some(Self::do_pack(mantissa, scale))
+    }
+
+    // the caller must make sure that @mantissa and @scale are valid
+    fn do_pack(mantissa: I, scale: u8) -> Self {
+        Self((mantissa << I::SCALE_BITS) | I::from_u8(scale))
     }
 
     fn valid_matissa(m: I) -> bool {
-        m <= I::MAX >> Self::SCALE_BITS && m >= I::MIN >> Self::SCALE_BITS
-    }
-
-    fn unpack(self) -> (I, u16) {
-        (self.mantissa(), self.raw_scale())
-    }
-
-    // the caller must make sure that @mantissa is valid
-    fn pack(mantissa: I, raw_scale: u16) -> Self {
-        Self((mantissa << Self::SCALE_BITS) | I::from_u16(raw_scale))
+        m <= I::MAX >> I::SCALE_BITS && m >= I::MIN >> I::SCALE_BITS
     }
 
     // the caller must make sure that @ma and @mb are valid
-    fn pack_sum(sum: I, raw_scale: u16) -> Option<Self> {
+    fn pack_sum(sum: I, scale: u8) -> Option<Self> {
         if Self::valid_matissa(sum) {
-            Some(Self::pack(sum, raw_scale))
-        } else if raw_scale > 0 {
-            Some(Self::pack(sum / I::TEN, raw_scale - 1))
+            Some(Self::do_pack(sum, scale))
+        } else if scale > 0 {
+            Some(Self::do_pack(sum / I::TEN, scale - 1))
         } else {
             None
         }
@@ -189,7 +169,7 @@ impl<I: UnderlyingInt, const MIN_SCALE: i32, const MAX_SCALE: i32>
         Self::pack_sum(a - b, scale) // TODO checked_sub 
     }
 
-    fn align_scale(self, right: Self) -> (I, I, u16) {
+    fn align_scale(self, right: Self) -> (I, I, u8) {
         let (a_man, a_scale) = self.unpack();
         let (b_man, b_scale) = right.unpack();
 
@@ -229,21 +209,15 @@ impl<I: UnderlyingInt, const MIN_SCALE: i32, const MAX_SCALE: i32>
     #[cold]
     fn add_by_dividing_small(
         big_man: I,
-        big_scale: u16,
+        big_scale: u8,
         small_man: I,
-        small_scale: u16,
-        small_avail: u16,
-        diff: u16,
-    ) -> (I, I, u16) {
-        let small_div_scale = diff - small_avail;
-
-        let Some(exp) = I::get_exp(small_div_scale) else {
-            return (small_man, I::ZERO, small_scale);
-        };
-
-        let new_small_man = small_man * exp;
-        let new_big_man = big_man / unsafe { I::unchecked_get_exp(small_avail) };
-        (new_small_man, new_big_man, big_scale - small_avail)
+        small_scale: u8,
+        small_avail: u8,
+        diff: u8,
+    ) -> (I, I, u8) {
+        let small_man = small_man * unsafe { I::unchecked_get_exp(diff - small_scale) };
+        let big_man = big_man / unsafe { I::unchecked_get_exp(small_avail) };
+        (small_man, big_man, big_scale - small_avail)
     }
 }
 
