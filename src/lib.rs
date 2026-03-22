@@ -1,6 +1,6 @@
 mod int128;
 
-use core::ops::{Add, AddAssign, BitOr, Div, Mul, Shl, Shr, Sub, SubAssign};
+use core::ops::{Add, AddAssign, BitOr, Div, Shl, Shr, Sub, SubAssign};
 
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
@@ -18,7 +18,6 @@ pub trait UnderlyingInt:
     + Ord
     + Add<Output = Self>
     + Sub<Output = Self>
-    + Mul<Output = Self>
     + Div<Output = Self>
     + Shl<u8, Output = Self>
     + Shr<u8, Output = Self>
@@ -34,15 +33,21 @@ pub trait UnderlyingInt:
     const MATISSA_DIGITS: u8;
     const SCALE_BITS: u8;
     const MAX_SCALE: u8;
+    const IS_SIGNED: bool;
+
     fn as_u8(self) -> u8;
     fn from_u8(n: u8) -> Self;
-
-    fn get_exp(i: u8) -> Self;
 
     fn leading_zeros(self) -> u32;
 
     fn avail_digits(self) -> u8;
-    fn mul_div_exp(self, right: Self, iexp: u8) -> Self;
+
+    // caller has made sure that no overflow
+    fn mul_exp(self, iexp: u8) -> Self;
+
+    fn div_exp(self, iexp: u8) -> Self;
+
+    fn mul_with_sum_scale(self, right: Self, sum_scale: u8) -> Option<(Self, u8)>;
 }
 
 impl<I: UnderlyingInt> Decimal<I> {
@@ -52,7 +57,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         self.0 >> I::SCALE_BITS
     }
 
-    fn scale(self) -> u8 {
+    pub fn scale(self) -> u8 {
         self.0.as_u8() & ((1 << I::SCALE_BITS) - 1)
     }
 
@@ -72,6 +77,8 @@ impl<I: UnderlyingInt> Decimal<I> {
 
     // the caller must make sure that @mantissa and @scale are valid
     fn do_pack(mantissa: I, scale: u8) -> Self {
+        debug_assert!(Self::valid_matissa(mantissa));
+        debug_assert!(scale <= I::MAX_SCALE);
         Self((mantissa << I::SCALE_BITS) | I::from_u8(scale))
     }
 
@@ -84,7 +91,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         if Self::valid_matissa(sum) {
             Some(Self::do_pack(sum, scale))
         } else if scale > 0 {
-            Some(Self::do_pack(sum / I::TEN, scale - 1))
+            Some(Self::do_pack(sum / I::TEN, scale - 1)) // TODO round div
         } else {
             None
         }
@@ -97,7 +104,10 @@ impl<I: UnderlyingInt> Decimal<I> {
 
     pub fn checked_sub(self, right: Self) -> Option<Self> {
         let (a, b, scale) = self.align_scale(right);
-        Self::pack_sum(a - b, scale) // TODO checked_sub 
+        if !I::IS_SIGNED && a < b {
+            return None;
+        }
+        Self::pack_sum(a - b, scale)
     }
 
     fn align_scale(self, right: Self) -> (I, I, u8) {
@@ -121,7 +131,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         let diff = big_scale - small_scale;
 
         if diff <= small_avail {
-            (small_man * I::get_exp(diff), big_man, big_scale)
+            (small_man.mul_exp(diff), big_man, big_scale)
         } else {
             Self::add_by_dividing_small(big_man, big_scale, small_man, small_avail, diff)
         }
@@ -136,8 +146,8 @@ impl<I: UnderlyingInt> Decimal<I> {
         small_avail: u8,
         diff: u8,
     ) -> (I, I, u8) {
-        let small_man = small_man * I::get_exp(diff - small_avail);
-        let big_man = big_man / I::get_exp(small_avail);
+        let small_man = small_man.mul_exp(diff - small_avail);
+        let big_man = big_man.div_exp(small_avail);
         (small_man, big_man, big_scale - small_avail)
     }
 
@@ -145,25 +155,13 @@ impl<I: UnderlyingInt> Decimal<I> {
         let (a_man, a_scale) = self.unpack();
         let (b_man, b_scale) = right.unpack();
 
-        let sum_scale = a_scale + b_scale;
-        if sum_scale <= I::MAX_SCALE {
-            // TODO sub signal bit?
-            if ((a_man.leading_zeros() + b_man.leading_zeros()) as u8) < I::BITS - I::SCALE_BITS {
-                Some(Self::do_pack(a_man * b_man, sum_scale))
-            } else {
-                let i = 3;
-                let man = I::mul_div_exp(a_man, b_man, i);
-                Some(Self::do_pack(man, sum_scale - i))
-            }
-        } else {
-            let diff = I::MAX_SCALE - sum_scale;
-            if ((a_man.leading_zeros() + b_man.leading_zeros()) as u8) < I::BITS - I::SCALE_BITS {
-                Some(Self::do_pack(a_man * b_man / I::TEN, I::MAX_SCALE))
-            } else {
-                let man = I::mul_div_exp(a_man, b_man, diff);
-                Some(Self::do_pack(man, I::MAX_SCALE))
-            }
+        if a_man == I::ZERO || b_man == I::ZERO {
+            return Some(Self::ZERO);
         }
+
+        a_man
+            .mul_with_sum_scale(b_man, a_scale + b_scale)
+            .map(|(man, scale)| Self::do_pack(man, scale))
     }
 }
 
