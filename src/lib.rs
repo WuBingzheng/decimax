@@ -7,7 +7,7 @@
 
 use core::ops::{Add, AddAssign, BitOr, Div, Mul, Shl, Shr, Sub, SubAssign};
 
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
 pub struct Decimal<I: UnderlyingInt>(I);
 
@@ -35,6 +35,8 @@ pub trait UnderlyingInt:
     const MIN: Self;
     const ZERO: Self;
     const TEN: Self;
+    const BITS: u8;
+    const MATISSA_DIGITS: u8;
     const SCALE_BITS: u8;
     const MAX_SCALE: u8;
     fn as_u8(self) -> u8;
@@ -43,7 +45,10 @@ pub trait UnderlyingInt:
     fn get_exp(i: u8) -> Option<Self>;
     unsafe fn unchecked_get_exp(i: u8) -> Self;
 
-    fn leading_zeros(self) -> u8;
+    fn leading_zeros(self) -> u32;
+
+    fn avail_digits(self) -> u8;
+    fn mul_div_exp(self, right: Self, iexp: u8) -> Self;
 }
 
 const ALL_EXPS: [i128; 39] = [
@@ -88,11 +93,56 @@ const ALL_EXPS: [i128; 39] = [
     10_i128.pow(38),
 ];
 
+// maxmax = pow(2, 121) - 1
+// for i in range(1,40):
+//     print("%d," % (maxmax // pow(10, i)))
+const AVAIL_THRESHOLD: [i128; 37] = [
+    265845599156983174580761412056068915,
+    26584559915698317458076141205606891,
+    2658455991569831745807614120560689,
+    265845599156983174580761412056068,
+    26584559915698317458076141205606,
+    2658455991569831745807614120560,
+    265845599156983174580761412056,
+    26584559915698317458076141205,
+    2658455991569831745807614120,
+    265845599156983174580761412,
+    26584559915698317458076141,
+    2658455991569831745807614,
+    265845599156983174580761,
+    26584559915698317458076,
+    2658455991569831745807,
+    265845599156983174580,
+    26584559915698317458,
+    2658455991569831745,
+    265845599156983174,
+    26584559915698317,
+    2658455991569831,
+    265845599156983,
+    26584559915698,
+    2658455991569,
+    265845599156,
+    26584559915,
+    2658455991,
+    265845599,
+    26584559,
+    2658455,
+    265845,
+    26584,
+    2658,
+    265,
+    26,
+    2,
+    0,
+];
+
 impl UnderlyingInt for i128 {
     const MAX: Self = Self::MAX;
     const MIN: Self = Self::MIN;
     const ZERO: Self = 0;
     const TEN: Self = 10;
+    const BITS: u8 = 128;
+    const MATISSA_DIGITS: u8 = 36;
     const SCALE_BITS: u8 = 6;
     const MAX_SCALE: u8 = 36;
 
@@ -109,8 +159,20 @@ impl UnderlyingInt for i128 {
     unsafe fn unchecked_get_exp(i: u8) -> i128 {
         unsafe { *ALL_EXPS.get_unchecked(i as usize) }
     }
-    fn leading_zeros(self) -> u8 {
-        self.leading_zeros() as u8
+    fn leading_zeros(self) -> u32 {
+        self.leading_zeros()
+    }
+
+    fn avail_digits(self) -> u8 {
+        let n = self.abs() | 1; // make 0 -> 1
+        let bits = n.leading_zeros() - Self::SCALE_BITS as u32 - 1; // 1 for sign
+        let digits = bits * 1233 >> 12; // math!
+        let ath = unsafe { AVAIL_THRESHOLD.get_unchecked(digits as usize) };
+        digits as u8 + (&n <= ath) as u8
+    }
+
+    fn mul_div_exp(self, right: Self, iexp: u8) -> Self {
+        todo!()
     }
 }
 
@@ -173,6 +235,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         let (a_man, a_scale) = self.unpack();
         let (b_man, b_scale) = right.unpack();
 
+        // aligned already
         if a_scale == b_scale {
             return (a_man, b_man, a_scale);
         }
@@ -185,8 +248,7 @@ impl<I: UnderlyingInt> Decimal<I> {
             (b_man, b_scale, a_man, a_scale)
         };
 
-        // let avail = 36 - smalli.ilog10();
-        let small_avail = small_man.leading_zeros() / 3;
+        let small_avail = small_man.avail_digits();
         let diff = big_scale - small_scale;
 
         if diff <= small_avail {
@@ -194,14 +256,7 @@ impl<I: UnderlyingInt> Decimal<I> {
             let exp = unsafe { I::unchecked_get_exp(diff) };
             (small_man * exp, big_man, big_scale)
         } else {
-            Self::add_by_dividing_small(
-                big_man,
-                big_scale,
-                small_man,
-                small_scale,
-                small_avail,
-                diff,
-            )
+            Self::add_by_dividing_small(big_man, big_scale, small_man, small_avail, diff)
         }
     }
 
@@ -211,26 +266,66 @@ impl<I: UnderlyingInt> Decimal<I> {
         big_man: I,
         big_scale: u8,
         small_man: I,
-        small_scale: u8,
         small_avail: u8,
         diff: u8,
     ) -> (I, I, u8) {
-        let small_man = small_man * unsafe { I::unchecked_get_exp(diff - small_scale) };
+        let small_man = small_man * unsafe { I::unchecked_get_exp(diff - small_avail) };
         let big_man = big_man / unsafe { I::unchecked_get_exp(small_avail) };
         (small_man, big_man, big_scale - small_avail)
     }
+
+    pub fn checked_mul(self, right: Self) -> Option<Self> {
+        let (a_man, a_scale) = self.unpack();
+        let (b_man, b_scale) = right.unpack();
+
+        let sum_scale = a_scale + b_scale;
+        if sum_scale <= I::MAX_SCALE {
+            // TODO sub signal bit?
+            if ((a_man.leading_zeros() + b_man.leading_zeros()) as u8) < I::BITS - I::SCALE_BITS {
+                Some(Self::do_pack(a_man * b_man, sum_scale))
+            } else {
+                let i = 3;
+                let man = I::mul_div_exp(a_man, b_man, i);
+                Some(Self::do_pack(man, sum_scale - i))
+            }
+        } else {
+            let diff = I::MAX_SCALE - sum_scale;
+            if ((a_man.leading_zeros() + b_man.leading_zeros()) as u8) < I::BITS - I::SCALE_BITS {
+                Some(Self::do_pack(a_man * b_man / I::TEN, I::MAX_SCALE))
+            } else {
+                let man = I::mul_div_exp(a_man, b_man, diff);
+                Some(Self::do_pack(man, I::MAX_SCALE))
+            }
+        }
+    }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     #[test]
-//     fn it_works() {
-//         let a = Decimal::pack(1000, 10);
-//         let b = Decimal::pack(1000, 13);
-//         let r = Decimal::pack(1001000, 13);
-//         assert_eq!(a.checked_add(b).unwrap(), r);
-//         assert_eq!(b.checked_add(a).unwrap(), r);
-//     }
-// }
+    #[test]
+    fn test_avail_digits() {
+        assert_eq!(0_i128.avail_digits(), 36);
+
+        let max = 2_i128.pow(121) - 1;
+        assert_eq!(max.avail_digits(), 0);
+
+        assert_eq!((max / 10 + 1).avail_digits(), 0);
+        assert_eq!((max / 10).avail_digits(), 1);
+        assert_eq!((max / 10 - 1).avail_digits(), 1);
+
+        assert_eq!((max / 1000 + 1).avail_digits(), 2);
+        assert_eq!((max / 1000).avail_digits(), 3);
+        assert_eq!((max / 1000 - 1).avail_digits(), 3);
+    }
+
+    #[test]
+    fn simple_add() {
+        let a = Decimal::pack(1000, 10).unwrap();
+        let b = Decimal::pack(1000, 13).unwrap();
+        let r = Decimal::pack(1001000, 13).unwrap();
+        assert_eq!(a.checked_add(b).unwrap(), r);
+        assert_eq!(b.checked_add(a).unwrap(), r);
+    }
+}
