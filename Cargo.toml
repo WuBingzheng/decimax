@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 num-traits = {version="0.2", default-features=false}
+div-pow10 = {path="../div-pow10"}
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports"] }

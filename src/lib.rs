@@ -1,6 +1,6 @@
 mod int128;
 
-use core::ops::{Add, AddAssign, BitOr, Div, Shl, Shr, Sub, SubAssign};
+use core::ops::{Add, AddAssign, BitOr, Div, Mul, Shl, Shr, Sub, SubAssign};
 
 #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
@@ -19,6 +19,7 @@ pub trait UnderlyingInt:
     + Add<Output = Self>
     + Sub<Output = Self>
     + Div<Output = Self>
+    + Mul<Output = Self>
     + Shl<u8, Output = Self>
     + Shr<u8, Output = Self>
     + BitOr<Output = Self>
@@ -48,6 +49,8 @@ pub trait UnderlyingInt:
     fn div_exp(self, iexp: u8) -> Self;
 
     fn mul_with_sum_scale(self, right: Self, sum_scale: u8) -> Option<(Self, u8)>;
+
+    fn is_mul_overflow(self, right: Self) -> bool;
 }
 
 impl<I: UnderlyingInt> Decimal<I> {
@@ -159,9 +162,20 @@ impl<I: UnderlyingInt> Decimal<I> {
             return Some(Self::ZERO);
         }
 
-        a_man
-            .mul_with_sum_scale(b_man, a_scale + b_scale)
-            .map(|(man, scale)| Self::do_pack(man, scale))
+        let (man, scale) = if !a_man.is_mul_overflow(b_man) {
+            let p = a_man * b_man;
+            let sum_scale = a_scale + b_scale;
+            if sum_scale <= I::MAX_SCALE {
+                (p, sum_scale)
+            } else {
+                let diff = sum_scale - I::MAX_SCALE;
+                (p.div_exp(diff), I::MAX_SCALE)
+            }
+        } else {
+            a_man.mul_with_sum_scale(b_man, a_scale + b_scale)?
+        };
+
+        Self::pack(man, scale)
     }
 }
 
@@ -192,5 +206,29 @@ mod tests {
         let r = Decimal::pack(1001000, 13).unwrap();
         assert_eq!(a.checked_add(b).unwrap(), r);
         assert_eq!(b.checked_add(a).unwrap(), r);
+    }
+
+    #[test]
+    fn test_mul() {
+        let a = Decimal::pack(1000, 10).unwrap();
+        assert_eq!(a.checked_mul(a), Decimal::pack(1000_000, 20));
+
+        let a = Decimal::pack(1000, 20).unwrap();
+        assert_eq!(a.checked_mul(a), Decimal::pack(100, 36));
+
+        let a = Decimal::pack(10_i128.pow(20), 10).unwrap();
+        assert_eq!(a.checked_mul(a), Decimal::pack(10_i128.pow(36), 16));
+
+        // overflow: (30 + 30) - 36 > 10 + 10
+        let a = Decimal::pack(10_i128.pow(30), 10).unwrap();
+        assert_eq!(a.checked_mul(a), None);
+
+        // (30 + 30) - 36 > 20 + 20
+        let a = Decimal::pack(10_i128.pow(30), 20).unwrap();
+        assert_eq!(a.checked_mul(a), Decimal::pack(10_i128.pow(36), 16));
+
+        // (20 + 20) - 36 < 30 + 30
+        let a = Decimal::pack(10_i128.pow(20), 30).unwrap();
+        assert_eq!(a.checked_mul(a), Decimal::pack(10_i128.pow(16), 36));
     }
 }
