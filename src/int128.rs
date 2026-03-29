@@ -148,7 +148,11 @@ impl UnderlyingInt for u128 {
                 break;
             }
         }
-        (q, r, avail_scale - left_scale)
+
+        // try best to reduce the scale
+        let (q, red_scale) = reduce_scale(q);
+
+        (q, r, avail_scale - left_scale - red_scale)
     }
 
     #[inline]
@@ -172,6 +176,43 @@ const fn mul2(a: u128, b: u128) -> (u128, u128) {
     let (mlow, carry2) = (alow * blow).overflowing_add(mid << 64);
     let mhigh = ahigh * bhigh + (mid >> 64) + ((carry1 as u128) << 64) + carry2 as u128;
     (mhigh, mlow)
+}
+
+fn reduce_scale(mut n: u128) -> (u128, u32) {
+    if n == 0 {
+        return (0, 0);
+    }
+    let mut scale = 0;
+    while n.trailing_zeros() >= 8 {
+        let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 8) };
+        if q * get_exp(8) != n {
+            break;
+        }
+        n = q;
+        scale += 8;
+    }
+    if n.trailing_zeros() >= 4 {
+        let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 4) };
+        if q * get_exp(4) == n {
+            n = q;
+            scale += 4;
+        }
+    }
+    if n.trailing_zeros() >= 2 {
+        let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 2) };
+        if q * get_exp(2) == n {
+            n = q;
+            scale += 2;
+        }
+    }
+    if n.trailing_zeros() >= 1 {
+        let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 1) };
+        if q * get_exp(1) == n {
+            n = q;
+            scale += 1;
+        }
+    }
+    (n, scale)
 }
 
 const INVERSES: [u128; 39] = [
