@@ -1,4 +1,4 @@
-use crate::UnderlyingInt;
+use crate::{UnderlyingInt, bits_to_digits};
 
 const ALL_EXPS: [u128; 39] = [
     1,
@@ -76,7 +76,7 @@ impl UnderlyingInt for u128 {
         // We do not calculate it accurately for performance.
         // The clear_digits may be bigger than needed.
         let clear_bits = 128 + Self::SCALE_BITS + 1 - high.leading_zeros(); // ignore @low
-        let mut clear_digits = (clear_bits * 1233 >> 12) + 1; // +1 for ceiling
+        let mut clear_digits = bits_to_digits(clear_bits) + 1; // +1 for ceiling
 
         // Reduce sum_scale if too big.
         if sum_scale > Self::MAX_SCALE {
@@ -101,6 +101,66 @@ impl UnderlyingInt for u128 {
         let n = self + get_exp(iexp) / 2; // no addition overflow. exp is even.
         unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, iexp) }
     }
+
+    fn div_rem_exp(self, iexp: u32) -> (Self, Self) {
+        let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(self, iexp) };
+        let r = self - q * get_exp(iexp);
+        (q, r)
+    }
+
+    // self * 2^extra_scale / right
+    fn div_with_extra_scale(self, right: Self, mut extra_scale: u32) -> Option<(Self, Self)> {
+        if self < INVERSES[extra_scale as usize] {
+            // self * 2^extra_scale is not overflow
+            Some((self * get_exp(extra_scale)).div_rem(right))
+        } else {
+            let mut q = 0_u128;
+            let mut r = self;
+            loop {
+                let avail_digits = bits_to_digits(r.leading_zeros());
+                let iexp = avail_digits.min(extra_scale);
+                let exp = get_exp(iexp);
+                let n = r * exp;
+                q = q.checked_mul(exp)?.checked_add(n / right)?;
+                r = n % right;
+                extra_scale -= iexp;
+                if extra_scale == 0 {
+                    break;
+                }
+            }
+            Some((q, r))
+        }
+    }
+
+    fn div_with_avail_scale(self, right: Self, avail_scale: u32) -> (Self, Self, u32) {
+        let mut q = 0_u128;
+        let mut r = self;
+        let mut left_scale = avail_scale;
+        loop {
+            let scale = bits_to_digits(r.leading_zeros()).min(left_scale);
+            let (q1, r1) = r.mul_exp(scale).div_rem(right);
+
+            q = q.mul_exp(scale) + q1;
+            r = r1;
+            left_scale -= scale;
+
+            if left_scale == 0 || r == 0 {
+                break;
+            }
+        }
+        (q, r, avail_scale - left_scale)
+    }
+
+    #[inline]
+    fn div_rem(self, right: Self) -> (Self, Self) {
+        if (self | right) <= u64::MAX as u128 {
+            let n64 = self as u64;
+            let d64 = right as u64;
+            ((n64 / d64) as u128, (n64 % d64) as u128)
+        } else {
+            (self / right, self % right)
+        }
+    }
 }
 
 // calculate: a * b = (mhigh,mlow)
@@ -113,3 +173,45 @@ const fn mul2(a: u128, b: u128) -> (u128, u128) {
     let mhigh = ahigh * bhigh + (mid >> 64) + ((carry1 as u128) << 64) + carry2 as u128;
     (mhigh, mlow)
 }
+
+const INVERSES: [u128; 39] = [
+    340282366920938463463374607431768211455,
+    34028236692093846346337460743176821145,
+    3402823669209384634633746074317682114,
+    340282366920938463463374607431768211,
+    34028236692093846346337460743176821,
+    3402823669209384634633746074317682,
+    340282366920938463463374607431768,
+    34028236692093846346337460743176,
+    3402823669209384634633746074317,
+    340282366920938463463374607431,
+    34028236692093846346337460743,
+    3402823669209384634633746074,
+    340282366920938463463374607,
+    34028236692093846346337460,
+    3402823669209384634633746,
+    340282366920938463463374,
+    34028236692093846346337,
+    3402823669209384634633,
+    340282366920938463463,
+    34028236692093846346,
+    3402823669209384634,
+    340282366920938463,
+    34028236692093846,
+    3402823669209384,
+    340282366920938,
+    34028236692093,
+    3402823669209,
+    340282366920,
+    34028236692,
+    3402823669,
+    340282366,
+    34028236,
+    3402823,
+    340282,
+    34028,
+    3402,
+    340,
+    34,
+    3,
+];

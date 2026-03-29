@@ -1,8 +1,8 @@
 mod int128;
 
-use core::ops::{Add, AddAssign, BitAnd, BitOr, Div, Mul, Shl, Shr, Sub, SubAssign};
+use core::ops::{Add, AddAssign, BitAnd, BitOr, Div, Mul, Rem, Shl, Shr, Sub, SubAssign};
 
-#[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
 pub struct Decimal<I: UnderlyingInt>(I);
 
@@ -12,6 +12,7 @@ pub trait UnderlyingInt:
     + Clone
     + Copy
     + core::fmt::Debug
+    + core::fmt::Display
     + PartialEq
     + Eq
     + PartialOrd
@@ -19,6 +20,7 @@ pub trait UnderlyingInt:
     + Add<Output = Self>
     + Sub<Output = Self>
     + Div<Output = Self>
+    + Rem<Output = Self>
     + Mul<Output = Self>
     + Shl<u32, Output = Self>
     + Shr<u32, Output = Self>
@@ -50,9 +52,19 @@ pub trait UnderlyingInt:
 
     fn mul_with_sum_scale(self, right: Self, sum_scale: u32) -> Option<(Self, u32)>;
 
-    fn min_avail_digits(self) -> u32 {
-        let bits = self.leading_zeros() - Self::SCALE_BITS - 1;
-        bits * 1233 >> 12 // math!
+    // calculate: self * 2^extra_scale / right
+    // return: quotient and remainder
+    // The quotient may be bigger that MAX_MATISSA.
+    fn div_with_extra_scale(self, right: Self, extra_scale: u32) -> Option<(Self, Self)>;
+
+    fn div_with_avail_scale(self, right: Self, avail_scale: u32) -> (Self, Self, u32);
+
+    fn div_rem(self, right: Self) -> (Self, Self);
+
+    fn div_rem_exp(self, iexp: u32) -> (Self, Self);
+
+    fn avail_digits(self) -> u32 {
+        bits_to_digits(self.leading_zeros() - 1 - Self::SCALE_BITS)
     }
 }
 
@@ -92,6 +104,10 @@ impl<I: UnderlyingInt> Decimal<I> {
 
         let meta = ((sign as u32) << I::SCALE_BITS) | scale;
         Self(I::from_u32(meta) << (I::BITS - 1 - I::SCALE_BITS) | mantissa)
+    }
+
+    pub fn checked_add_exact(self, _right: Self) -> Option<Self> {
+        todo!()
     }
 
     pub fn checked_add(self, right: Self) -> Option<Self> {
@@ -153,11 +169,60 @@ impl<I: UnderlyingInt> Decimal<I> {
 
         Some(Self::do_pack(a_sign ^ b_sign, scale, man))
     }
+
+    pub fn checked_div(self, right: Self) -> Option<Self> {
+        let (a_sign, a_scale, a_man) = self.unpack();
+        let (b_sign, b_scale, b_man) = right.unpack();
+        if b_man == I::ZERO {
+            return None;
+        }
+
+        let ((mut q1, r1), mut diff_scale) = if a_scale >= b_scale {
+            (a_man.div_rem(b_man), a_scale - b_scale)
+        } else {
+            (a_man.div_with_extra_scale(b_man, b_scale - a_scale)?, 0)
+        };
+
+        if r1 != I::ZERO {
+            let avail_scale = q1.avail_digits().min(I::MAX_SCALE - diff_scale);
+            let (q2, _r2, act_scale) = r1.div_with_avail_scale(b_man, avail_scale);
+            q1 = q1.mul_exp(act_scale) + q2;
+            // r1 = r2;
+            diff_scale += act_scale;
+        };
+
+        Some(Self::do_pack(a_sign ^ b_sign, diff_scale, q1))
+    }
 }
 
-// Mark this function as #[cold] to avoid interfering with the main flow of the
-// caller add_or_sub(), thereby enabling better compiler optimizations.
-#[cold]
+impl<I: UnderlyingInt> Decimal<I> {
+    pub fn is_zero(self) -> bool {
+        let (_, _, man) = self.unpack();
+        man == I::ZERO
+    }
+
+    pub fn is_positive(self) -> bool {
+        let (sign, _, man) = self.unpack();
+        sign == 0 && man != I::ZERO
+    }
+
+    pub fn is_negative(self) -> bool {
+        let (sign, _, man) = self.unpack();
+        sign != 0 && man != I::ZERO
+    }
+}
+
+impl<I: UnderlyingInt> core::fmt::Debug for Decimal<I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (sign, scale, man) = self.unpack();
+        write!(f, "Decimal:[{sign} {scale} {man}]")
+    }
+}
+
+// Mark this function as #[inline(never)] to avoid interfering with the
+// main flow of the caller add_or_sub(), thereby enabling better compiler
+// optimizations.
+#[inline(never)]
 fn align_scale<I>(a_man: I, a_scale: u32, b_man: I, b_scale: u32) -> (I, I, u32)
 where
     I: UnderlyingInt,
@@ -170,7 +235,7 @@ where
         (b_man, b_scale, a_man, a_scale)
     };
 
-    let small_avail = small_man.min_avail_digits();
+    let small_avail = small_man.avail_digits();
     let diff = big_scale - small_scale;
 
     if diff <= small_avail {
@@ -184,25 +249,39 @@ where
     }
 }
 
+fn loop_div<I>(mut q: I, mut r: I, d: I, mut diff_scale: u32) -> (I, I, u32)
+where
+    I: UnderlyingInt,
+{
+    loop {
+        // if diff_scale % 2 == 1 {
+        if diff_scale == I::MAX_SCALE {
+            return (q, r, diff_scale);
+        }
+        if r == I::ZERO {
+            return (q, r, diff_scale);
+        }
+        if q > I::MAX_MATISSA / I::TEN {
+            return (q, r, diff_scale);
+        }
+
+        let n = r * I::TEN;
+        let (q0, r0) = n.div_rem(d);
+        q = q * I::TEN + q0;
+        r = r0;
+        diff_scale += 1;
+    }
+
+    // (q, r, diff_scale)
+}
+
+pub(crate) fn bits_to_digits(bits: u32) -> u32 {
+    bits * 1233 >> 12 // math!
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_avail_digits() {
-        assert_eq!(0_u128.min_avail_digits(), 36);
-
-        let max = 2_u128.pow(121) - 1;
-        assert_eq!(max.min_avail_digits(), 0);
-
-        assert_eq!((max / 10 + 1).min_avail_digits(), 0);
-        assert_eq!((max / 10).min_avail_digits(), 0);
-        assert_eq!((max / 10 - 1).min_avail_digits(), 0);
-
-        assert_eq!((max / 1000 + 1).min_avail_digits(), 2);
-        assert_eq!((max / 1000).min_avail_digits(), 2);
-        assert_eq!((max / 1000 - 1).min_avail_digits(), 2);
-    }
 
     #[test]
     fn simple_add() {
@@ -235,5 +314,18 @@ mod tests {
         // (20 + 20) - 36 < 30 + 30
         let a = Decimal::pack(0, 30, 10_u128.pow(20)).unwrap();
         assert_eq!(a.checked_mul(a), Decimal::pack(0, 36, 10_u128.pow(16)));
+    }
+
+    #[test]
+    fn test_div() {
+        let a = Decimal::pack(0, 10, 1000).unwrap();
+        let b = Decimal::pack(0, 10, 200).unwrap();
+        let c = Decimal::pack(0, 10, 300).unwrap();
+        assert_eq!(a.checked_div(b), Decimal::pack(0, 0, 5));
+        assert_eq!(b.checked_div(a), Decimal::pack(0, 1, 2));
+        assert_eq!(
+            a.checked_div(c),
+            Decimal::pack(0, 35, 3333333333_3333333333_3333333333_333333)
+        );
     }
 }
