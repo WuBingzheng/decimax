@@ -1,52 +1,5 @@
 use crate::{UnderlyingInt, bits_to_digits};
 
-const ALL_EXPS: [u128; 39] = [
-    1,
-    10_u128.pow(1),
-    10_u128.pow(2),
-    10_u128.pow(3),
-    10_u128.pow(4),
-    10_u128.pow(5),
-    10_u128.pow(6),
-    10_u128.pow(7),
-    10_u128.pow(8),
-    10_u128.pow(9),
-    10_u128.pow(10),
-    10_u128.pow(11),
-    10_u128.pow(12),
-    10_u128.pow(13),
-    10_u128.pow(14),
-    10_u128.pow(15),
-    10_u128.pow(16),
-    10_u128.pow(17),
-    10_u128.pow(18),
-    10_u128.pow(19),
-    10_u128.pow(20),
-    10_u128.pow(21),
-    10_u128.pow(22),
-    10_u128.pow(23),
-    10_u128.pow(24),
-    10_u128.pow(25),
-    10_u128.pow(26),
-    10_u128.pow(27),
-    10_u128.pow(28),
-    10_u128.pow(29),
-    10_u128.pow(30),
-    10_u128.pow(31),
-    10_u128.pow(32),
-    10_u128.pow(33),
-    10_u128.pow(34),
-    10_u128.pow(35),
-    10_u128.pow(36),
-    10_u128.pow(37),
-    10_u128.pow(38),
-];
-
-fn get_exp(i: u32) -> u128 {
-    debug_assert!(i <= 36);
-    unsafe { *ALL_EXPS.get_unchecked(i as usize) }
-}
-
 impl UnderlyingInt for u128 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -136,7 +89,9 @@ impl UnderlyingInt for u128 {
         let mut q = 0_u128;
         let mut r = self;
         let mut left_scale = avail_scale;
-        loop {
+
+        // long division
+        while left_scale > 0 {
             let scale = bits_to_digits(r.leading_zeros()).min(left_scale);
             let (q1, r1) = r.mul_exp(scale).div_rem(right);
 
@@ -144,7 +99,7 @@ impl UnderlyingInt for u128 {
             r = r1;
             left_scale -= scale;
 
-            if left_scale == 0 || r == 0 {
+            if r == 0 {
                 break;
             }
         }
@@ -165,6 +120,11 @@ impl UnderlyingInt for u128 {
             (self / right, self % right)
         }
     }
+}
+
+fn get_exp(i: u32) -> u128 {
+    debug_assert!(i <= 36);
+    unsafe { *ALL_EXPS.get_unchecked(i as usize) }
 }
 
 // calculate: a * b = (mhigh,mlow)
@@ -214,6 +174,48 @@ fn reduce_scale(mut n: u128) -> (u128, u32) {
     }
     (n, scale)
 }
+
+const ALL_EXPS: [u128; 39] = [
+    1,
+    10_u128.pow(1),
+    10_u128.pow(2),
+    10_u128.pow(3),
+    10_u128.pow(4),
+    10_u128.pow(5),
+    10_u128.pow(6),
+    10_u128.pow(7),
+    10_u128.pow(8),
+    10_u128.pow(9),
+    10_u128.pow(10),
+    10_u128.pow(11),
+    10_u128.pow(12),
+    10_u128.pow(13),
+    10_u128.pow(14),
+    10_u128.pow(15),
+    10_u128.pow(16),
+    10_u128.pow(17),
+    10_u128.pow(18),
+    10_u128.pow(19),
+    10_u128.pow(20),
+    10_u128.pow(21),
+    10_u128.pow(22),
+    10_u128.pow(23),
+    10_u128.pow(24),
+    10_u128.pow(25),
+    10_u128.pow(26),
+    10_u128.pow(27),
+    10_u128.pow(28),
+    10_u128.pow(29),
+    10_u128.pow(30),
+    10_u128.pow(31),
+    10_u128.pow(32),
+    10_u128.pow(33),
+    10_u128.pow(34),
+    10_u128.pow(35),
+    10_u128.pow(36),
+    10_u128.pow(37),
+    10_u128.pow(38),
+];
 
 const INVERSES: [u128; 39] = [
     340282366920938463463374607431768211455,
