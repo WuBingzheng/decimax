@@ -51,12 +51,7 @@ pub trait UnderlyingInt:
 
     fn mul_with_sum_scale(self, right: Self, sum_scale: u32) -> Option<(Self, u32)>;
 
-    // calculate: self * 2^extra_scale / right
-    // return: quotient and remainder
-    // The quotient may be bigger that MAX_MATISSA.
-    fn div_with_extra_scale(self, right: Self, extra_scale: u32) -> Option<(Self, Self)>;
-
-    fn div_with_avail_scale(self, right: Self, avail_scale: u32) -> (Self, Self, u32);
+    fn div_with_scales(self, d: Self, s_scale: u32, d_scale: u32) -> Option<(Self, u32)>;
 
     fn div_rem(self, right: Self) -> (Self, Self);
 
@@ -181,21 +176,9 @@ impl<I: UnderlyingInt> Decimal<I> {
             return None;
         }
 
-        let ((mut q1, r1), mut diff_scale) = if a_scale >= b_scale {
-            (a_man.div_rem(b_man), a_scale - b_scale)
-        } else {
-            (a_man.div_with_extra_scale(b_man, b_scale - a_scale)?, 0)
-        };
+        let (q, scale) = a_man.div_with_scales(b_man, a_scale, b_scale)?;
 
-        if r1 != I::ZERO {
-            let avail_scale = q1.avail_digits().min(I::MAX_SCALE - diff_scale);
-            let (q2, _r2, act_scale) = r1.div_with_avail_scale(b_man, avail_scale);
-            q1 = q1.mul_exp(act_scale) + q2;
-            // r1 = r2;
-            diff_scale += act_scale;
-        };
-
-        Some(Self::do_pack(a_sign ^ b_sign, diff_scale, q1))
+        Some(Self::do_pack(a_sign ^ b_sign, scale, q))
     }
 }
 
@@ -305,5 +288,10 @@ mod tests {
             a.checked_div(c),
             Decimal::pack(0, 35, 3333333333_3333333333_3333333333_333333)
         );
+
+        let a = Decimal::pack(0, 12, 1).unwrap();
+        let b = Decimal::pack(0, 10, 2).unwrap();
+        assert_eq!(a.checked_div(b), Decimal::pack(0, 3, 5));
+        assert_eq!(b.checked_div(a), Decimal::pack(0, 0, 200));
     }
 }
