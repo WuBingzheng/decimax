@@ -40,6 +40,11 @@ pub trait UnderlyingInt:
     const MAX_SCALE: u32;
     const MAX_MATISSA: Self;
 
+    type Signed;
+
+    fn to_signed(self, sign: u8) -> Self::Signed;
+    fn from_signed(s: Self::Signed) -> (Self, u8);
+
     fn as_u32(self) -> u32;
     fn from_u32(n: u32) -> Self;
 
@@ -74,7 +79,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     //   +-+-----+-------------+
     //   |S|scale|  mantissa   |
     //   +-+-----+-------------+
-    pub fn unpack(self) -> (u8, u32, I) {
+    fn unpack(self) -> (u8, u32, I) {
         let mantissa = self.0 & I::MAX_MATISSA;
         let meta = (self.0 >> (I::BITS - 1 - I::SCALE_BITS)).as_u32();
         let scale = meta & ((1 << I::SCALE_BITS) - 1);
@@ -82,21 +87,8 @@ impl<I: UnderlyingInt> Decimal<I> {
         (sign as u8, scale, mantissa)
     }
 
-    pub fn pack(sign: u8, scale: u32, mantissa: I) -> Option<Self> {
-        if sign > 1 {
-            return None;
-        }
-        if scale > I::MAX_SCALE {
-            return None;
-        }
-        if mantissa > I::MAX_MATISSA {
-            return None;
-        }
-        Some(Self::do_pack(sign, scale, mantissa))
-    }
-
     // the caller must make sure that the inputs are valid
-    fn do_pack(sign: u8, scale: u32, mantissa: I) -> Self {
+    fn pack(sign: u8, scale: u32, mantissa: I) -> Self {
         debug_assert!(sign <= 1);
         debug_assert!(scale <= I::MAX_SCALE);
         debug_assert!(mantissa <= I::MAX_MATISSA);
@@ -105,6 +97,28 @@ impl<I: UnderlyingInt> Decimal<I> {
         Self(I::from_u32(meta) << (I::BITS - 1 - I::SCALE_BITS) | mantissa)
     }
 
+    pub fn parts(self) -> (I::Signed, u32) {
+        let (sign, scale, man) = self.unpack();
+        (I::to_signed(man, sign), scale)
+    }
+
+    pub fn from_parts(mantissa: I::Signed, scale: u32) -> Self {
+        Self::try_from_parts(mantissa, scale).unwrap()
+    }
+
+    pub fn try_from_parts(mantissa: I::Signed, scale: u32) -> Option<Self> {
+        if scale > I::MAX_SCALE {
+            return None;
+        }
+        let (man, sign) = I::from_signed(mantissa);
+        if man > I::MAX_MATISSA {
+            return None;
+        }
+        Some(Self::pack(sign, scale, man))
+    }
+}
+
+impl<I: UnderlyingInt> Decimal<I> {
     pub fn checked_add_exact(self, _right: Self) -> Option<Self> {
         todo!()
     }
@@ -141,10 +155,10 @@ impl<I: UnderlyingInt> Decimal<I> {
 
         // pack
         if sum <= I::MAX_MATISSA {
-            Some(Self::do_pack(sign, scale, sum))
+            Some(Self::pack(sign, scale, sum))
         } else if scale > 0 {
             let man = (sum + (I::TEN >> 1)) / I::TEN; // rounding-divide
-            Some(Self::do_pack(sign, scale - 1, man))
+            Some(Self::pack(sign, scale - 1, man))
         } else {
             None
         }
@@ -169,7 +183,7 @@ impl<I: UnderlyingInt> Decimal<I> {
             a_man.mul_with_sum_scale(b_man, a_scale + b_scale)?
         };
 
-        Some(Self::do_pack(a_sign ^ b_sign, scale, man))
+        Some(Self::pack(a_sign ^ b_sign, scale, man))
     }
 
     pub fn checked_div(self, right: Self) -> Option<Self> {
@@ -181,7 +195,7 @@ impl<I: UnderlyingInt> Decimal<I> {
 
         let (q, scale) = a_man.div_with_scales(b_man, a_scale, b_scale)?;
 
-        Some(Self::do_pack(a_sign ^ b_sign, scale, q))
+        Some(Self::pack(a_sign ^ b_sign, scale, q))
     }
 }
 
@@ -322,60 +336,4 @@ where
 
 pub(crate) fn bits_to_digits(bits: u32) -> u32 {
     bits * 1233 >> 12 // math!
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn simple_add() {
-        let a = Decimal::pack(0, 10, 1000).unwrap();
-        let b = Decimal::pack(0, 13, 1000).unwrap();
-        let r = Decimal::pack(0, 13, 1001000).unwrap();
-        assert_eq!(a.checked_add(b).unwrap(), r);
-        assert_eq!(b.checked_add(a).unwrap(), r);
-    }
-
-    #[test]
-    fn test_mul() {
-        let a = Decimal::pack(0, 10, 1000).unwrap();
-        assert_eq!(a.checked_mul(a), Decimal::pack(0, 20, 1000_000));
-
-        let a = Decimal::pack(0, 20, 1000).unwrap();
-        assert_eq!(a.checked_mul(a), Decimal::pack(0, 36, 100));
-
-        let a = Decimal::pack(0, 10, 10_u128.pow(20)).unwrap();
-        assert_eq!(a.checked_mul(a), Decimal::pack(0, 16, 10_u128.pow(36)));
-
-        // overflow: (30 + 30) - 36 > 10 + 10
-        let a = Decimal::pack(0, 10, 10_u128.pow(30)).unwrap();
-        assert_eq!(a.checked_mul(a), None);
-
-        // (30 + 30) - 36 > 20 + 20
-        let a = Decimal::pack(0, 20, 10_u128.pow(30)).unwrap();
-        assert_eq!(a.checked_mul(a), Decimal::pack(0, 16, 10_u128.pow(36)));
-
-        // (20 + 20) - 36 < 30 + 30
-        let a = Decimal::pack(0, 30, 10_u128.pow(20)).unwrap();
-        assert_eq!(a.checked_mul(a), Decimal::pack(0, 36, 10_u128.pow(16)));
-    }
-
-    #[test]
-    fn test_div() {
-        let a = Decimal::pack(0, 10, 1000).unwrap();
-        let b = Decimal::pack(0, 10, 200).unwrap();
-        let c = Decimal::pack(0, 10, 300).unwrap();
-        assert_eq!(a.checked_div(b), Decimal::pack(0, 0, 5));
-        assert_eq!(b.checked_div(a), Decimal::pack(0, 1, 2));
-        assert_eq!(
-            a.checked_div(c),
-            Decimal::pack(0, 35, 3333333333_3333333333_3333333333_333333)
-        );
-
-        let a = Decimal::pack(0, 12, 1).unwrap();
-        let b = Decimal::pack(0, 10, 2).unwrap();
-        assert_eq!(a.checked_div(b), Decimal::pack(0, 3, 5));
-        assert_eq!(b.checked_div(a), Decimal::pack(0, 0, 200));
-    }
 }

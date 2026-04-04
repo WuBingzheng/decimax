@@ -10,6 +10,20 @@ impl UnderlyingInt for u128 {
     const MAX_MATISSA: Self = Self::MAX >> (Self::SCALE_BITS + 1);
     const MIN_UNDERINT: Self = (1 << 127) | Self::MAX_MATISSA;
 
+    type Signed = i128;
+
+    fn to_signed(self, sign: u8) -> Self::Signed {
+        let i = self as i128; // self as mantissa fits 127-bits
+        if sign == 0 { i } else { -i }
+    }
+    fn from_signed(s: Self::Signed) -> (Self, u8) {
+        if s >= 0 {
+            (s as u128, 0)
+        } else {
+            ((-s) as u128, 0)
+        }
+    }
+
     fn as_u32(self) -> u32 {
         self as u32
     }
