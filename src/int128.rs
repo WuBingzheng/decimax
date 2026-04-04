@@ -4,12 +4,11 @@ impl UnderlyingInt for u128 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
     const TEN: Self = 10;
-    const MAX: Self = Self::MAX;
-    const MIN: Self = Self::MIN;
 
     const BITS: u32 = 128;
     const MAX_SCALE: u32 = 36;
     const MAX_MATISSA: Self = Self::MAX >> (Self::SCALE_BITS + 1);
+    const MIN_UNDERINT: Self = (1 << 127) | Self::MAX_MATISSA;
 
     fn as_u32(self) -> u32 {
         self as u32
@@ -90,6 +89,8 @@ impl UnderlyingInt for u128 {
         let mut r = self;
         let mut left_scale = avail_scale;
 
+        // TODO try 64-bit first, but need 64-bit version reduce_scale()
+
         // long division
         while left_scale > 0 {
             let scale = bits_to_digits(r.leading_zeros()).min(left_scale);
@@ -105,7 +106,7 @@ impl UnderlyingInt for u128 {
         }
 
         // try best to reduce the scale
-        let (q, red_scale) = reduce_scale(q);
+        let (q, red_scale) = reduce_scale(q, avail_scale - left_scale);
 
         (q, r, avail_scale - left_scale - red_scale)
     }
@@ -138,41 +139,41 @@ const fn mul2(a: u128, b: u128) -> (u128, u128) {
     (mhigh, mlow)
 }
 
-fn reduce_scale(mut n: u128) -> (u128, u32) {
+fn reduce_scale(mut n: u128, max_scale: u32) -> (u128, u32) {
     if n == 0 {
         return (0, 0);
     }
-    let mut scale = 0;
-    while n.trailing_zeros() >= 8 {
+    let mut left_scale = max_scale;
+    while n.trailing_zeros() >= 8 && left_scale > 0 {
         let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 8) };
         if q * get_exp(8) != n {
             break;
         }
         n = q;
-        scale += 8;
+        left_scale -= 8;
     }
-    if n.trailing_zeros() >= 4 {
+    if n.trailing_zeros() >= 4 && left_scale > 0 {
         let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 4) };
         if q * get_exp(4) == n {
             n = q;
-            scale += 4;
+            left_scale -= 4;
         }
     }
-    if n.trailing_zeros() >= 2 {
+    if n.trailing_zeros() >= 2 && left_scale > 0 {
         let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 2) };
         if q * get_exp(2) == n {
             n = q;
-            scale += 2;
+            left_scale -= 2;
         }
     }
-    if n.trailing_zeros() >= 1 {
+    if n.trailing_zeros() >= 1 && left_scale > 0 {
         let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 1) };
         if q * get_exp(1) == n {
             n = q;
-            scale += 1;
+            left_scale -= 1;
         }
     }
-    (n, scale)
+    (n, max_scale - left_scale)
 }
 
 const ALL_EXPS: [u128; 39] = [

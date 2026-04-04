@@ -32,8 +32,7 @@ pub trait UnderlyingInt:
     const ZERO: Self;
     const ONE: Self;
     const TEN: Self;
-    const MAX: Self;
-    const MIN: Self;
+    const MIN_UNDERINT: Self;
 
     const BITS: u32;
     const SCALE_BITS: u32 = (Self::MAX_SCALE * 2 - 1).ilog2();
@@ -70,6 +69,8 @@ pub trait UnderlyingInt:
 
 impl<I: UnderlyingInt> Decimal<I> {
     pub const ZERO: Self = Self(I::ZERO);
+    pub const MAX: Self = Self(I::MAX_MATISSA);
+    pub const MIN: Self = Self(I::MIN_UNDERINT);
 
     // layout:
     //   +-+-----+-------------+
@@ -107,6 +108,9 @@ impl<I: UnderlyingInt> Decimal<I> {
     }
 
     pub fn checked_add_exact(self, _right: Self) -> Option<Self> {
+        todo!()
+    }
+    pub fn checked_mul_int(self, _right: Self) -> Option<Self> {
         todo!()
     }
 
@@ -247,32 +251,6 @@ where
         let big_man = big_man.div_exp(small_avail);
         (small_man, big_man, big_scale - small_avail)
     }
-}
-
-fn loop_div<I>(mut q: I, mut r: I, d: I, mut diff_scale: u32) -> (I, I, u32)
-where
-    I: UnderlyingInt,
-{
-    loop {
-        // if diff_scale % 2 == 1 {
-        if diff_scale == I::MAX_SCALE {
-            return (q, r, diff_scale);
-        }
-        if r == I::ZERO {
-            return (q, r, diff_scale);
-        }
-        if q > I::MAX_MATISSA / I::TEN {
-            return (q, r, diff_scale);
-        }
-
-        let n = r * I::TEN;
-        let (q0, r0) = n.div_rem(d);
-        q = q * I::TEN + q0;
-        r = r0;
-        diff_scale += 1;
-    }
-
-    // (q, r, diff_scale)
 }
 
 pub(crate) fn bits_to_digits(bits: u32) -> u32 {
