@@ -1,7 +1,10 @@
 mod int128;
 
 use core::cmp::Ordering;
-use core::ops::{Add, AddAssign, BitAnd, BitOr, Div, Mul, Rem, Shl, Shr, Sub, SubAssign};
+use core::fmt::{self, Debug, Display};
+use core::ops::{
+    Add, AddAssign, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub, SubAssign,
+};
 
 #[derive(Copy, Clone, Hash, Default)]
 #[repr(transparent)]
@@ -12,8 +15,8 @@ pub trait UnderlyingInt:
     Sized
     + Clone
     + Copy
-    + core::fmt::Debug
-    + core::fmt::Display
+    + Debug
+    + Display
     + PartialEq
     + Eq
     + PartialOrd
@@ -27,6 +30,7 @@ pub trait UnderlyingInt:
     + Shr<u32, Output = Self>
     + BitOr<Output = Self>
     + BitAnd<Output = Self>
+    + BitXor<Output = Self>
     + AddAssign
     + SubAssign
 {
@@ -40,7 +44,7 @@ pub trait UnderlyingInt:
     const MAX_SCALE: u32;
     const MAX_MATISSA: Self;
 
-    type Signed;
+    type Signed: Display;
 
     fn to_signed(self, sign: u8) -> Self::Signed;
     fn from_signed(s: Self::Signed) -> (Self, u8);
@@ -150,7 +154,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         } else if a_man > b_man {
             (a_sign, a_man - b_man)
         } else {
-            (b_sign, b_man - a_man)
+            (a_sign ^ 1, b_man - a_man)
         };
 
         // pack
@@ -297,10 +301,32 @@ impl<I: UnderlyingInt> PartialOrd for Decimal<I> {
     }
 }
 
-impl<I: UnderlyingInt> core::fmt::Debug for Decimal<I> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (sign, scale, man) = self.unpack();
-        write!(f, "Decimal:[{sign} {scale} {man}]")
+impl<I: UnderlyingInt> Neg for Decimal<I> {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        let sign = I::ONE << (I::BITS - 1);
+        Self(self.0 ^ sign)
+    }
+}
+
+impl<I: UnderlyingInt> Add for Decimal<I> {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        self.checked_add(rhs).unwrap()
+    }
+}
+
+impl<I: UnderlyingInt> Sub for Decimal<I> {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.checked_sub(rhs).unwrap()
+    }
+}
+
+impl<I: UnderlyingInt> Debug for Decimal<I> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (iman, scale) = self.parts();
+        write!(f, "Decimal:[{iman} {scale}]")
     }
 }
 
@@ -314,10 +340,10 @@ where
 {
     // big_man/big_scale: the number with bigger scale
     // small_man/small_scale: the number with smaller scale
-    let (big_man, big_scale, small_man, small_scale) = if a_scale > b_scale {
-        (a_man, a_scale, b_man, b_scale)
+    let (mut big_man, mut big_scale, mut small_man, small_scale, is_a_big) = if a_scale > b_scale {
+        (a_man, a_scale, b_man, b_scale, true)
     } else {
-        (b_man, b_scale, a_man, a_scale)
+        (b_man, b_scale, a_man, a_scale, false)
     };
 
     let small_avail = small_man.avail_digits();
@@ -325,12 +351,18 @@ where
 
     if diff <= small_avail {
         // rescale small_man to big_scale
-        (small_man.mul_exp(diff), big_man, big_scale)
+        small_man = small_man.mul_exp(diff);
     } else {
         // rescale both small_man and big_man
-        let small_man = small_man.mul_exp(diff - small_avail);
-        let big_man = big_man.div_exp(small_avail);
-        (small_man, big_man, big_scale - small_avail)
+        small_man = small_man.mul_exp(small_avail);
+        big_man = big_man.div_exp(diff - small_avail);
+        big_scale = small_scale + small_avail;
+    }
+
+    if is_a_big {
+        (big_man, small_man, big_scale)
+    } else {
+        (small_man, big_man, big_scale)
     }
 }
 
