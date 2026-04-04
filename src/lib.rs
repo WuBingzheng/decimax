@@ -1,8 +1,9 @@
 mod int128;
 
+use core::cmp::Ordering;
 use core::ops::{Add, AddAssign, BitAnd, BitOr, Div, Mul, Rem, Shl, Shr, Sub, SubAssign};
 
-#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
+#[derive(Copy, Clone, Hash, Default)]
 #[repr(transparent)]
 pub struct Decimal<I: UnderlyingInt>(I);
 
@@ -46,6 +47,8 @@ pub trait UnderlyingInt:
 
     // caller has made sure that no overflow
     fn mul_exp(self, iexp: u32) -> Self;
+
+    fn checked_mul_exp(self, iexp: u32) -> Option<Self>;
 
     fn div_exp(self, iexp: u32) -> Self;
 
@@ -196,6 +199,87 @@ impl<I: UnderlyingInt> Decimal<I> {
     pub fn is_negative(self) -> bool {
         let (sign, _, man) = self.unpack();
         sign != 0 && man != I::ZERO
+    }
+}
+
+impl<I: UnderlyingInt> Eq for Decimal<I> {}
+
+impl<I: UnderlyingInt> PartialEq for Decimal<I> {
+    fn eq(&self, other: &Self) -> bool {
+        let (a_sign, a_scale, a_man) = self.unpack();
+        let (b_sign, b_scale, b_man) = other.unpack();
+
+        if a_man == I::ZERO {
+            return b_man == I::ZERO;
+        }
+        if b_man == I::ZERO {
+            return a_man == I::ZERO;
+        }
+        if a_sign != b_sign {
+            return false;
+        }
+        if a_scale == b_scale {
+            return a_man == b_man;
+        }
+        if a_scale < b_scale {
+            match a_man.checked_mul_exp(b_scale - a_scale) {
+                Some(a_man) => a_man == b_man,
+                None => false,
+            }
+        } else {
+            match b_man.checked_mul_exp(a_scale - b_scale) {
+                Some(b_man) => b_man == a_man,
+                None => false,
+            }
+        }
+    }
+}
+
+impl<I: UnderlyingInt> Ord for Decimal<I> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl<I: UnderlyingInt> PartialOrd for Decimal<I> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let (a_sign, a_scale, a_man) = self.unpack();
+        let (b_sign, b_scale, b_man) = other.unpack();
+
+        if a_sign != b_sign {
+            if a_man == I::ZERO && b_man == I::ZERO {
+                Ordering::Equal
+            } else if a_sign == 0 {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        } else {
+            let ret = if a_scale == b_scale {
+                a_man.cmp(&b_man)
+            } else if a_scale < b_scale {
+                match a_man.checked_mul_exp(b_scale - a_scale) {
+                    Some(a_man) => a_man.cmp(&b_man),
+                    None => Ordering::Greater,
+                }
+            } else {
+                match b_man.checked_mul_exp(a_scale - b_scale) {
+                    Some(b_man) => a_man.cmp(&b_man),
+                    None => Ordering::Less,
+                }
+            };
+
+            if a_sign == 0 {
+                ret
+            } else {
+                match ret {
+                    Ordering::Less => Ordering::Greater,
+                    Ordering::Greater => Ordering::Less,
+                    Ordering::Equal => Ordering::Equal,
+                }
+            }
+        }
+        .into() // Some()
     }
 }
 

@@ -49,6 +49,10 @@ impl UnderlyingInt for u128 {
         self * get_exp(iexp)
     }
 
+    fn checked_mul_exp(self, iexp: u32) -> Option<Self> {
+        self.checked_mul(get_exp(iexp))
+    }
+
     fn div_exp(self, iexp: u32) -> Self {
         let n = self + get_exp(iexp) / 2; // no addition overflow. exp is even.
         unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, iexp) }
