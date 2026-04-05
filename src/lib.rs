@@ -334,16 +334,16 @@ impl<I: UnderlyingInt> Debug for Decimal<I> {
 // main flow of the caller add_or_sub(), thereby enabling better compiler
 // optimizations.
 #[inline(never)]
-fn align_scale<I>(a_man: I, a_scale: u32, b_man: I, b_scale: u32) -> (I, I, u32)
+fn align_scale<I>(mut a_man: I, a_scale: u32, mut b_man: I, b_scale: u32) -> (I, I, u32)
 where
     I: UnderlyingInt,
 {
     // big_man/big_scale: the number with bigger scale
     // small_man/small_scale: the number with smaller scale
-    let (mut big_man, mut big_scale, mut small_man, small_scale, is_a_big) = if a_scale > b_scale {
-        (a_man, a_scale, b_man, b_scale, true)
+    let (big_man, mut big_scale, small_man, small_scale) = if a_scale > b_scale {
+        (&mut a_man, a_scale, &mut b_man, b_scale)
     } else {
-        (b_man, b_scale, a_man, a_scale, false)
+        (&mut b_man, b_scale, &mut a_man, a_scale)
     };
 
     let small_avail = small_man.avail_digits();
@@ -351,19 +351,15 @@ where
 
     if diff <= small_avail {
         // rescale small_man to big_scale
-        small_man = small_man.mul_exp(diff);
+        *small_man = small_man.mul_exp(diff);
     } else {
         // rescale both small_man and big_man
-        small_man = small_man.mul_exp(small_avail);
-        big_man = big_man.div_exp(diff - small_avail);
+        *small_man = small_man.mul_exp(small_avail);
+        *big_man = big_man.div_exp(diff - small_avail);
         big_scale = small_scale + small_avail;
     }
 
-    if is_a_big {
-        (big_man, small_man, big_scale)
-    } else {
-        (small_man, big_man, big_scale)
-    }
+    (a_man, b_man, big_scale)
 }
 
 pub(crate) fn bits_to_digits(bits: u32) -> u32 {
