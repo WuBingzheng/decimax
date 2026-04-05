@@ -16,7 +16,7 @@ fn test_add(a: Dec, b: Dec, r: Dec) {
 }
 
 #[test]
-fn add() {
+fn add_base() {
     // normal
     let a = Dec::from_parts(1000, 10);
     let b = Dec::from_parts(2000, 10);

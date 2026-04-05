@@ -20,7 +20,7 @@ impl UnderlyingInt for u128 {
         if s >= 0 {
             (s as u128, 0)
         } else {
-            ((-s) as u128, 0)
+            ((-s) as u128, 1)
         }
     }
 
@@ -54,7 +54,14 @@ impl UnderlyingInt for u128 {
             return None;
         }
 
-        let (q, _) = unsafe { div_pow10::bit128::unchecked_div_double(high, low, clear_digits) };
+        let (mut q, r) =
+            unsafe { div_pow10::bit128::unchecked_div_double(high, low, clear_digits) };
+
+        // rounding
+        if r >= get_exp(clear_digits) / 2 {
+            q += 1;
+        }
+
         Some((q, sum_scale - clear_digits))
     }
 

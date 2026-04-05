@@ -323,6 +323,20 @@ impl<I: UnderlyingInt> Sub for Decimal<I> {
     }
 }
 
+impl<I: UnderlyingInt> Mul for Decimal<I> {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.checked_mul(rhs).unwrap()
+    }
+}
+
+impl<I: UnderlyingInt> Div for Decimal<I> {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self::Output {
+        self.checked_div(rhs).unwrap()
+    }
+}
+
 impl<I: UnderlyingInt> Debug for Decimal<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (iman, scale) = self.parts();
