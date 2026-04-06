@@ -37,12 +37,14 @@ pub trait UnderlyingInt:
     const ZERO: Self;
     const ONE: Self;
     const TEN: Self;
+    const MAX_MATISSA: Self;
     const MIN_UNDERINT: Self;
 
     const BITS: u32;
-    const SCALE_BITS: u32 = (Self::MAX_SCALE * 2 - 1).ilog2();
     const MAX_SCALE: u32;
-    const MAX_MATISSA: Self;
+    const SCALE_BITS: u32 = (Self::MAX_SCALE * 2 - 1).ilog2();
+    const META_BITS: u32 = 1 + Self::SCALE_BITS;
+    const MATISSA_BITS: u32 = Self::BITS - Self::META_BITS;
 
     type Signed: Display;
 
@@ -70,7 +72,7 @@ pub trait UnderlyingInt:
     fn div_rem_exp(self, iexp: u32) -> (Self, Self);
 
     fn avail_digits(self) -> u32 {
-        bits_to_digits(self.leading_zeros() - 1 - Self::SCALE_BITS)
+        bits_to_digits(self.leading_zeros() - Self::META_BITS)
     }
 }
 
@@ -85,7 +87,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     //   +-+-----+-------------+
     fn unpack(self) -> (u8, u32, I) {
         let mantissa = self.0 & I::MAX_MATISSA;
-        let meta = (self.0 >> (I::BITS - 1 - I::SCALE_BITS)).as_u32();
+        let meta = (self.0 >> I::MATISSA_BITS).as_u32();
         let scale = meta & ((1 << I::SCALE_BITS) - 1);
         let sign = meta >> I::SCALE_BITS;
         (sign as u8, scale, mantissa)
@@ -98,7 +100,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         debug_assert!(mantissa <= I::MAX_MATISSA);
 
         let meta = ((sign as u32) << I::SCALE_BITS) | scale;
-        Self(I::from_u32(meta) << (I::BITS - 1 - I::SCALE_BITS) | mantissa)
+        Self(I::from_u32(meta) << I::MATISSA_BITS | mantissa)
     }
 
     pub fn parts(self) -> (I::Signed, u32) {
@@ -175,7 +177,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         let (b_sign, b_scale, b_man) = right.unpack();
 
         let is_mul_overflow =
-            a_man.leading_zeros() + b_man.leading_zeros() < I::BITS + I::SCALE_BITS + 1;
+            a_man.leading_zeros() + b_man.leading_zeros() < I::BITS + I::META_BITS;
 
         let (man, scale) = if !is_mul_overflow {
             let p = a_man * b_man;

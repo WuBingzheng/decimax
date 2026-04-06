@@ -4,11 +4,11 @@ impl UnderlyingInt for u128 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
     const TEN: Self = 10;
+    const MAX_MATISSA: Self = Self::MAX >> Self::META_BITS;
+    const MIN_UNDERINT: Self = (1 << 127) | Self::MAX_MATISSA;
 
     const BITS: u32 = 128;
     const MAX_SCALE: u32 = 36;
-    const MAX_MATISSA: Self = Self::MAX >> (Self::SCALE_BITS + 1);
-    const MIN_UNDERINT: Self = (1 << 127) | Self::MAX_MATISSA;
 
     type Signed = i128;
 
@@ -41,7 +41,7 @@ impl UnderlyingInt for u128 {
         // Calculate the digits that needed be cleared.
         // We do not calculate it accurately for performance.
         // The clear_digits may be bigger than needed.
-        let clear_bits = 128 + Self::SCALE_BITS + 1 - high.leading_zeros(); // ignore @low
+        let clear_bits = 128 + Self::META_BITS - high.leading_zeros(); // ignore @low
         let mut clear_digits = bits_to_digits(clear_bits) + 1; // +1 for ceiling
 
         // Reduce sum_scale if too big.
@@ -89,15 +89,15 @@ impl UnderlyingInt for u128 {
         let diff_scale = s_scale.saturating_sub(d_scale);
         let max_scale = Self::MAX_SCALE - diff_scale;
 
-        let (mut q, r, mut act_scale) = if d <= u32::MAX as u128 {
-            let d = d as u32;
-            if d < 2_u32.pow(Self::SCALE_BITS + 1) {
-                div_with_scales_by_tiny(self, d, max_scale)
-            } else {
-                div_with_scales_by32(self, d, max_scale)
+        let (mut q, r, mut act_scale) = match u32::try_from(d) {
+            Ok(d) => {
+                if d < 2_u32.pow(Self::META_BITS) {
+                    div_with_scales_by_tiny(self, d, max_scale)
+                } else {
+                    div_with_scales_by32(self, d, max_scale)
+                }
             }
-        } else {
-            div_with_scales_full(self, d, max_scale)
+            Err(_) => div_with_scales_full(self, d, max_scale),
         };
 
         // scale at least
@@ -261,8 +261,7 @@ fn div_with_scales_by_tiny(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32)
     // make sure that: `n * 10.pow(n_avail_scale) / d` fits in MANTISSA (121-bits),
     // ==> n * 10.pow(n_avail_scale) <= d * 2.pow(121)
     // ==> n_avail_scale = log2(121 + #d - #n)
-    let avail_bits =
-        (128 - 1 - u128::SCALE_BITS) + (32 - d.leading_zeros()) - (128 - n.leading_zeros()) - 1;
+    let avail_bits = u128::MATISSA_BITS + (32 - d.leading_zeros()) - (128 - n.leading_zeros()) - 1;
 
     let act_scale = bits_to_digits(avail_bits).min(max_scale);
 
