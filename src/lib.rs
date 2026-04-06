@@ -131,16 +131,18 @@ impl<I: UnderlyingInt> Decimal<I> {
     }
 
     pub fn checked_add(self, right: Self) -> Option<Self> {
-        self.add_or_sub(right, true)
+        let (b_sign, b_scale, b_man) = right.unpack();
+        self.do_add(b_sign, b_scale, b_man)
     }
 
     pub fn checked_sub(self, right: Self) -> Option<Self> {
-        self.add_or_sub(right, false)
+        let (b_sign, b_scale, b_man) = right.unpack();
+        self.do_add(b_sign ^ 1, b_scale, b_man)
     }
 
-    fn add_or_sub(self, right: Self, is_add: bool) -> Option<Self> {
+    #[inline]
+    fn do_add(self, b_sign: u8, b_scale: u32, b_man: I) -> Option<Self> {
         let (a_sign, a_scale, a_man) = self.unpack();
-        let (b_sign, b_scale, b_man) = right.unpack();
 
         let (a_man, b_man, scale) = if a_scale == b_scale {
             (a_man, b_man, a_scale)
@@ -148,13 +150,13 @@ impl<I: UnderlyingInt> Decimal<I> {
             align_scale(a_man, a_scale, b_man, b_scale)
         };
 
-        // do the addition or substraction
-        let (sign, sum) = if (a_sign == b_sign) == is_add {
+        // do the addition
+        let (sign, sum) = if a_sign == b_sign {
             (a_sign, a_man + b_man)
         } else if a_man > b_man {
             (a_sign, a_man - b_man)
         } else {
-            (a_sign ^ 1, b_man - a_man)
+            (b_sign, b_man - a_man)
         };
 
         // pack
