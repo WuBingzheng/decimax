@@ -228,32 +228,19 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
 }
 
 fn div_with_scales_by32(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
-    let (mut q, mut r) = div128_by32(n, d);
-
-    // long division
-    let mut act_scale = 0;
-    while r != 0 {
-        // choose a scale and make sure that:
-        // 1. q * 10^scale <= MAX_MATISSA, (exactly)
-        // 2. r * 10^scale < 2^96, (scale<=19)
-        // 3. scale + act_scale <= max_scale.
-        let scale = exact_avail_digits(q).min(max_scale - act_scale).min(19);
-        if scale == 0 {
-            break;
-        }
-
-        let (q1, r1) = div96_by32(r.mul_exp(scale), d);
-
-        q = q.mul_exp(scale) + q1;
-        r = r1;
-        act_scale += scale;
-
-        if scale < 19 {
-            break;
+    let (q, r) = div128_by32(n, d);
+    if r == 0 {
+        (q, r, 0)
+    } else {
+        let avail_bits = r.leading_zeros().min(q.leading_zeros() - u128::META_BITS);
+        let act_scale = bits_to_digits(avail_bits).min(max_scale);
+        if act_scale == 0 {
+            (q, r, 0)
+        } else {
+            let (q1, r1) = div128_by32(r.mul_exp(act_scale), d);
+            (q.mul_exp(act_scale) + q1, r1, act_scale)
         }
     }
-
-    (q, r, act_scale)
 }
 
 // The @d fits in META_BITS, so the @n will not overflow 128bit after scaling bigger.
