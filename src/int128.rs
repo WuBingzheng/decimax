@@ -90,8 +90,12 @@ impl UnderlyingInt for u128 {
         let max_scale = Self::MAX_SCALE - diff_scale;
 
         let (mut q, r, mut act_scale) = if d <= u32::MAX as u128 {
-            // let (mut q, r, mut act_scale) = if false {
-            div_with_scales_by32(self, d, max_scale)
+            let d = d as u32;
+            if d < 2_u32.pow(Self::SCALE_BITS + 1) {
+                div_with_scales_by_tiny(self, d, max_scale)
+            } else {
+                div_with_scales_by32(self, d, max_scale)
+            }
         } else {
             div_with_scales_full(self, d, max_scale)
         };
@@ -223,7 +227,7 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
     (n, max_scale - left_scale)
 }
 
-fn div_with_scales_by32(n: u128, d: u128, max_scale: u32) -> (u128, u128, u32) {
+fn div_with_scales_by32(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
     let (mut q, mut r) = div128_by32(n, d);
 
     // long division
@@ -249,6 +253,20 @@ fn div_with_scales_by32(n: u128, d: u128, max_scale: u32) -> (u128, u128, u32) {
         }
     }
 
+    (q, r, act_scale)
+}
+
+// The @d fits in META_BITS, so the @n will not overflow 128bit after scaling bigger.
+fn div_with_scales_by_tiny(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
+    // make sure that: `n * 10.pow(n_avail_scale) / d` fits in MANTISSA (121-bits),
+    // ==> n * 10.pow(n_avail_scale) <= d * 2.pow(121)
+    // ==> n_avail_scale = log2(121 + #d - #n)
+    let avail_bits =
+        (128 - 1 - u128::SCALE_BITS) + (32 - d.leading_zeros()) - (128 - n.leading_zeros()) - 1;
+
+    let act_scale = bits_to_digits(avail_bits).min(max_scale);
+
+    let (q, r) = div128_by32(n.mul_exp(act_scale), d);
     (q, r, act_scale)
 }
 
@@ -281,7 +299,7 @@ fn exact_avail_digits(n: u128) -> u32 {
     floor + (n <= MATISSA_INVERSES[floor as usize]) as u32
 }
 
-fn div96_by32(a: u128, b: u128) -> (u128, u128) {
+fn div96_by32(a: u128, b: u32) -> (u128, u128) {
     let b = b as u64;
 
     let high = (a >> 64) as u64;
@@ -298,7 +316,7 @@ fn div96_by32(a: u128, b: u128) -> (u128, u128) {
     (((q1 as u128) << 32) | q2 as u128, r as u128)
 }
 
-fn div128_by32(a: u128, b: u128) -> (u128, u128) {
+fn div128_by32(a: u128, b: u32) -> (u128, u128) {
     let b = b as u64;
 
     let high = (a >> 64) as u64;
