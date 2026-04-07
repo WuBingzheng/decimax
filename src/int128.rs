@@ -89,14 +89,9 @@ impl UnderlyingInt for u128 {
         let diff_scale = s_scale.saturating_sub(d_scale);
         let max_scale = Self::MAX_SCALE - diff_scale;
 
+        // TODO optimize 64-bit
         let (mut q, r, mut act_scale) = match u32::try_from(d) {
-            Ok(d) => {
-                if d < 2_u32.pow(Self::META_BITS) {
-                    div_with_scales_by_tiny(self, d, max_scale)
-                } else {
-                    div_with_scales_by32(self, d, max_scale)
-                }
-            }
+            Ok(d) => div_with_scales_by32(self, d, max_scale),
             Err(_) => div_with_scales_full(self, d, max_scale),
         };
 
@@ -230,59 +225,44 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
 fn div_with_scales_by32(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
     let (q, r) = div128_by32(n, d);
     if r == 0 {
-        (q, r, 0)
-    } else {
-        let avail_bits = r.leading_zeros().min(q.leading_zeros() - u128::META_BITS);
-        let act_scale = bits_to_digits(avail_bits).min(max_scale);
-        if act_scale == 0 {
-            (q, r, 0)
-        } else {
-            let (q1, r1) = div128_by32(r.mul_exp(act_scale), d);
-            (q.mul_exp(act_scale) + q1, r1, act_scale)
-        }
+        return (q, 0, 0);
     }
-}
 
-// The @d fits in META_BITS, so the @n will not overflow 128bit after scaling bigger.
-fn div_with_scales_by_tiny(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
-    // make sure that: `n * 10.pow(n_avail_scale) / d` fits in MANTISSA (121-bits),
-    // ==> n * 10.pow(n_avail_scale) <= d * 2.pow(121)
-    // ==> n_avail_scale = log2(121 + #d - #n)
-    let avail_bits = u128::MATISSA_BITS + (32 - d.leading_zeros()) - (128 - n.leading_zeros()) - 1;
-
+    // find the biggest @act_scale that
+    // - r * 10.pow(act_scale) fits in u128 (128-bit)
+    // - q * 10.pow(act_scale) fits in mantissa (121-bit)
+    // - act_scale <= max_scale
+    let avail_bits = r.leading_zeros().min(q.leading_zeros() - u128::META_BITS);
     let act_scale = bits_to_digits(avail_bits).min(max_scale);
+    if act_scale == 0 {
+        return (q, r, 0);
+    }
 
-    let (q, r) = div128_by32(n.mul_exp(act_scale), d);
-    (q, r, act_scale)
+    let (q2, r2) = div128_by32(r.mul_exp(act_scale), d);
+    (q.mul_exp(act_scale) + q2, r2, act_scale)
 }
 
 fn div_with_scales_full(n: u128, d: u128, max_scale: u32) -> (u128, u128, u32) {
-    // first division
-    let mut act_scale = exact_avail_digits(n).min(max_scale);
-    let (mut q, mut r) = n.mul_exp(act_scale).div_rem(d);
+    let (mut q, mut r) = n.div_rem(d);
 
     // long division
+    let mut act_scale = 0;
     while r != 0 {
-        let scale = exact_avail_digits(q.max(r)).min(max_scale - act_scale);
+        let avail_bits = r.leading_zeros().min(q.leading_zeros() - u128::META_BITS);
+        let scale = bits_to_digits(avail_bits).min(max_scale - act_scale);
         if scale == 0 {
             break;
         }
 
         r = r.mul_exp(scale);
-        let q1 = r / d;
-        r -= q1 * d;
+        let q2 = r / d;
+        r -= q2 * d;
 
-        q = q.mul_exp(scale) + q1;
+        q = q.mul_exp(scale) + q2;
         act_scale += scale;
     }
 
     (q, r, act_scale)
-}
-
-fn exact_avail_digits(n: u128) -> u32 {
-    let floor = n.avail_digits();
-
-    floor + (n <= MATISSA_INVERSES[floor as usize]) as u32
 }
 
 fn div96_by32(a: u128, b: u32) -> (u128, u128) {

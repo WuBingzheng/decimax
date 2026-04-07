@@ -194,6 +194,10 @@ impl<I: UnderlyingInt> Decimal<I> {
         Some(Self::pack(a_sign ^ b_sign, scale, man))
     }
 
+    pub fn checked_div_rem(self, right: Self) -> Option<(Self, Self)> {
+        todo!()
+    }
+
     pub fn checked_div(self, right: Self) -> Option<Self> {
         let (a_sign, a_scale, a_man) = self.unpack();
         let (b_sign, b_scale, b_man) = right.unpack();
