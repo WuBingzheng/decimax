@@ -33,7 +33,7 @@ fn add_base() {
     let e = Dec::from_parts(1001000, 13);
     test_add(a, d, e);
 
-    let max_mantissa = (1 << 121) - 1;
+    let max_mantissa = (1_i128 << 121) - 1;
 
     // different scales with big mantissa
     let big1 = Dec::from_parts(max_mantissa - 1, 7);

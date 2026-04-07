@@ -108,15 +108,21 @@ impl<I: UnderlyingInt> Decimal<I> {
         (I::to_signed(man, sign), scale)
     }
 
-    pub fn from_parts(mantissa: I::Signed, scale: u32) -> Self {
+    pub fn from_parts<S>(mantissa: S, scale: u32) -> Self
+    where
+        S: Into<I::Signed>,
+    {
         Self::try_from_parts(mantissa, scale).unwrap()
     }
 
-    pub fn try_from_parts(mantissa: I::Signed, scale: u32) -> Option<Self> {
+    pub fn try_from_parts<S>(mantissa: S, scale: u32) -> Option<Self>
+    where
+        S: Into<I::Signed>,
+    {
         if scale > I::MAX_SCALE {
             return None;
         }
-        let (man, sign) = I::from_signed(mantissa);
+        let (man, sign) = I::from_signed(mantissa.into());
         if man > I::MAX_MATISSA {
             return None;
         }
@@ -128,8 +134,9 @@ impl<I: UnderlyingInt> Decimal<I> {
     pub fn checked_add_exact(self, _right: Self) -> Option<Self> {
         todo!()
     }
-    pub fn checked_mul_int(self, _right: Self) -> Option<Self> {
-        todo!()
+
+    pub fn abs(self) -> Self {
+        Self(self.0 << 1 >> 1)
     }
 
     pub fn checked_add(self, right: Self) -> Option<Self> {
@@ -194,8 +201,11 @@ impl<I: UnderlyingInt> Decimal<I> {
         Some(Self::pack(a_sign ^ b_sign, scale, man))
     }
 
-    pub fn checked_div_rem(self, right: Self) -> Option<(Self, Self)> {
-        todo!()
+    pub fn checked_mul_int<S>(self, i: S) -> Option<Self>
+    where
+        S: Into<I::Signed>,
+    {
+        self.checked_mul(Self::try_from_parts(i, 0)?)
     }
 
     pub fn checked_div(self, right: Self) -> Option<Self> {
@@ -205,9 +215,16 @@ impl<I: UnderlyingInt> Decimal<I> {
             return None;
         }
 
-        let (q, scale) = a_man.div_with_scales(b_man, a_scale, b_scale)?;
+        let (q_man, q_scale) = a_man.div_with_scales(b_man, a_scale, b_scale)?;
 
-        Some(Self::pack(a_sign ^ b_sign, scale, q))
+        Some(Self::pack(a_sign ^ b_sign, q_scale, q_man))
+    }
+
+    pub fn checked_div_int<S>(self, i: S) -> Option<Self>
+    where
+        S: Into<I::Signed>,
+    {
+        self.checked_div(Self::try_from_parts(i, 0)?)
     }
 }
 
@@ -320,28 +337,28 @@ impl<I: UnderlyingInt> Neg for Decimal<I> {
 impl<I: UnderlyingInt> Add for Decimal<I> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
-        self.checked_add(rhs).unwrap()
+        self.checked_add(rhs).expect("addition overflow")
     }
 }
 
 impl<I: UnderlyingInt> Sub for Decimal<I> {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
-        self.checked_sub(rhs).unwrap()
+        self.checked_sub(rhs).expect("substraction overflow")
     }
 }
 
 impl<I: UnderlyingInt> Mul for Decimal<I> {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {
-        self.checked_mul(rhs).unwrap()
+        self.checked_mul(rhs).expect("multiplication overflow")
     }
 }
 
 impl<I: UnderlyingInt> Div for Decimal<I> {
     type Output = Self;
     fn div(self, rhs: Self) -> Self::Output {
-        self.checked_div(rhs).unwrap()
+        self.checked_div(rhs).expect("division overflow")
     }
 }
 
