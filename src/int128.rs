@@ -31,9 +31,27 @@ impl UnderlyingInt for u128 {
         self.leading_zeros()
     }
 
+    // caller must make sure that no overflow
+    fn mul_exp(self, iexp: u32) -> Self {
+        self * get_exp(iexp)
+    }
+
+    // we check the overflow
+    fn checked_mul_exp(self, iexp: u32) -> Option<Self> {
+        self.checked_mul(get_exp(iexp))
+    }
+
+    fn div_exp(self, iexp: u32) -> Self {
+        let n = self + get_exp(iexp) / 2; // no addition overflow. exp is even.
+
+        // SAFETY: self < MAX_MANTISSA, so n fits in 127-bit
+        unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, iexp) }
+    }
+
     #[inline]
     fn mul_with_sum_scale(self, right: Self, sum_scale: u32) -> Option<(Self, u32)> {
         if self.leading_zeros() + right.leading_zeros() >= Self::BITS + Self::META_BITS {
+            // fast path, keep the code simple
             let p = self * right;
             if sum_scale <= Self::MAX_SCALE {
                 Some((p, sum_scale))
@@ -41,41 +59,29 @@ impl UnderlyingInt for u128 {
                 Some((p.div_exp(sum_scale - Self::MAX_SCALE), Self::MAX_SCALE))
             }
         } else {
+            // full path
             mul_with_sum_scale_full(self, right, sum_scale)
         }
     }
 
-    // caller must make sure that no overflow
-    fn mul_exp(self, iexp: u32) -> Self {
-        self * get_exp(iexp)
-    }
-
-    fn checked_mul_exp(self, iexp: u32) -> Option<Self> {
-        self.checked_mul(get_exp(iexp))
-    }
-
-    fn div_exp(self, iexp: u32) -> Self {
-        let n = self + get_exp(iexp) / 2; // no addition overflow. exp is even.
-        unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, iexp) }
-    }
-
+    #[inline]
     fn div_with_scales(self, d: Self, s_scale: u32, d_scale: u32) -> Option<(Self, u32)> {
         let diff_scale = s_scale.saturating_sub(d_scale);
         let max_scale = Self::MAX_SCALE - diff_scale;
 
-        // TODO optimize 64-bit
+        // TODO optimize 64-bit divisor too
         let (mut q, mut r, mut act_scale) = match u32::try_from(d) {
             Ok(d) => div_with_scales_by32(self, d, max_scale),
             Err(_) => div_with_scales_full(self, d, max_scale),
         };
 
-        // scale at least
+        // increase the scale if d_scale > s_scale
         let min_scale = d_scale.saturating_sub(s_scale);
         if act_scale < min_scale {
             (q, r) = increase_scale(q, r, d, min_scale - act_scale)?;
             act_scale = min_scale;
         }
-        // try best to reduce the scale
+        // reduce the scale if division exactly
         else if r == 0 && act_scale > min_scale {
             let (q0, red_scale) = reduce_scale(q, act_scale - min_scale);
             q = q0;
@@ -84,24 +90,19 @@ impl UnderlyingInt for u128 {
 
         // round
         if r * 2 >= d {
+            if q == u128::MAX_MATISSA {
+                // The final scale must be 0 (but why?), there is no room to reduce
+                debug_assert_eq!(diff_scale + act_scale - min_scale, 0);
+                return None;
+            }
             q += 1;
         }
 
         Some((q, diff_scale + act_scale - min_scale))
     }
-
-    #[inline]
-    fn div_rem(self, right: Self) -> (Self, Self) {
-        if (self | right) <= u64::MAX as u128 {
-            let n64 = self as u64;
-            let d64 = right as u64;
-            ((n64 / d64) as u128, (n64 % d64) as u128)
-        } else {
-            (self / right, self % right)
-        }
-    }
 }
 
+// the caller must make sure that: @i < 39
 fn get_exp(i: u32) -> u128 {
     // Although in most cases, 36 (which is MAX_SCALE) is enough,
     // but in some cases we need more.
@@ -110,7 +111,20 @@ fn get_exp(i: u32) -> u128 {
     unsafe { *ALL_EXPS.get_unchecked(i as usize) }
 }
 
+// calculate: n / d and n % d
+#[inline]
+fn div_rem(n: u128, d: u128) -> (u128, u128) {
+    if (n | d) <= u64::MAX as u128 {
+        let n64 = n as u64;
+        let d64 = d as u64;
+        ((n64 / d64) as u128, (n64 % d64) as u128)
+    } else {
+        (n / d, n % d)
+    }
+}
+
 // calculate: a * b = (mhigh,mlow)
+#[inline]
 const fn mul2(a: u128, b: u128) -> (u128, u128) {
     let (ahigh, alow) = (a >> 64, a & u64::MAX as u128);
     let (bhigh, blow) = (b >> 64, b & u64::MAX as u128);
@@ -169,6 +183,7 @@ fn reduce_scale_96(mut n: u128, max_scale: u32) -> (u128, u32) {
 fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
     let mut left_scale = max_scale;
     while n as u8 == 0 && left_scale >= 8 {
+        // SAFETY: n < MAX_MANTISSA, so fits in 127-bit
         let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 8) };
         if (q as u32).wrapping_mul(10000_0000) != n as u32 {
             break;
@@ -177,6 +192,7 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
         left_scale -= 8;
     }
     if n & 0xF == 0 && left_scale >= 4 {
+        // SAFETY: n < MAX_MANTISSA, so fits in 127-bit
         let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 4) };
         if (q as u32).wrapping_mul(10000) == n as u32 {
             n = q;
@@ -184,6 +200,7 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
         }
     }
     if n & 0x3 == 0 && left_scale >= 2 {
+        // SAFETY: n < MAX_MANTISSA, so fits in 127-bit
         let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 2) };
         if (q as u32).wrapping_mul(100) == n as u32 {
             n = q;
@@ -191,6 +208,7 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
         }
     }
     if n & 0x1 == 0 && left_scale >= 1 {
+        // SAFETY: n < MAX_MANTISSA, so fits in 127-bit
         let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, 1) };
         if (q as u32).wrapping_mul(10) == n as u32 {
             n = q;
@@ -202,7 +220,7 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
 
 #[cold]
 fn increase_scale(q: u128, r: u128, d: u128, scale: u32) -> Option<(u128, u128)> {
-    let (q2, r2) = r.checked_mul_exp(scale)?.div_rem(d);
+    let (q2, r2) = div_rem(r.checked_mul_exp(scale)?, d);
     let q = q.checked_mul_exp(scale)?.checked_add(q2)?;
     if q <= u128::MAX_MATISSA {
         Some((q, r2))
@@ -215,7 +233,7 @@ fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u3
     let (high, low) = mul2(a, b);
 
     if high == 0 {
-        // the production is in range [MAX_MATISSA / 2, u128::MAX]
+        // the production @low is in range [MAX_MATISSA / 2, u128::MAX]
         return big128_with_sum_scale(low, sum_scale);
     }
 
@@ -229,24 +247,28 @@ fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u3
 
     // check the scale @sum_scale
     if sum_scale > u128::MAX_SCALE {
+        // normal case
         clear_digits = clear_digits.max(sum_scale - u128::MAX_SCALE);
     } else if clear_digits > sum_scale {
+        // edge case, overflow, return None
         if clear_digits == sum_scale + 1 {
-            // Corner case. The @clear_digits maybe 1 more than need.
+            // edge case in edge case. The overflow may be false because
+            // the @clear_digits maybe 1 more than need. So here we give
+            // it one more chance by decreasing it by 1 and check it later.
             clear_digits -= 1;
         } else {
             return None;
         }
     }
 
-    // rounding
-    // TODO will this make the q overflow?
+    // prepare for rounding
     let (low, carry) = low.overflowing_add(get_exp(clear_digits) / 2);
     let high = high + carry as u128;
 
+    // SAFETY: high > 10.pow(clear_digits) because of the META_BITS
     let (q, _r) = unsafe { div_pow10::bit128::unchecked_div_double(high, low, clear_digits) };
 
-    // handle the corner case above
+    // handle the edge case above
     if q > u128::MAX_MATISSA {
         debug_assert_eq!(clear_digits, sum_scale);
         return None;
@@ -255,9 +277,10 @@ fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u3
     Some((q, sum_scale - clear_digits))
 }
 
+// reduce the @man to under MAX_MANTISSA
 #[cold]
 fn big128_with_sum_scale(man: u128, sum_scale: u32) -> Option<(u128, u32)> {
-    // check the mantissa @man
+    // check the mantissa @man, which is in range [MAX_MATISSA / 2, u128::MAX]
     let mut clear_digits = if man > u128::MAX_MATISSA * 100 {
         3
     } else if man > u128::MAX_MATISSA * 10 {
@@ -279,7 +302,9 @@ fn big128_with_sum_scale(man: u128, sum_scale: u32) -> Option<(u128, u32)> {
     if clear_digits == 0 {
         Some((man, sum_scale))
     } else {
-        // can not call div_exp() because @man may be larger than MAX_MANTASSI
+        // can not call div_exp() because @man is larger than MAX_MANTASSI
+        //
+        // SAFETY: man > 10.pow(clear_digits) because of the META_BITS
         let mut q = unsafe { div_pow10::bit128::unchecked_div_single(man, clear_digits) };
         let exp = get_exp(clear_digits);
         let r = man - q * exp;
@@ -307,12 +332,15 @@ fn div_with_scales_by32(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
         return (q, r, 0);
     }
 
+    // We do the division once only, but no loop. So in worst cases (@d is big
+    // and @n < @d), the @q may only have 96 significant bits. Although it is
+    // not fill the 121 bits, it should be enough.
     let (q2, r2) = div128_by32(r.mul_exp(act_scale), d);
     (q.mul_exp(act_scale) + q2, r2, act_scale)
 }
 
 fn div_with_scales_full(n: u128, d: u128, max_scale: u32) -> (u128, u128, u32) {
-    let (mut q, mut r) = n.div_rem(d);
+    let (mut q, mut r) = div_rem(n, d);
 
     // long division
     let mut act_scale = 0;

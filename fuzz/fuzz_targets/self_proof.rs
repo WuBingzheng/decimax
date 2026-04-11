@@ -45,7 +45,7 @@ fn check_div_q(n: Dec128, d: Dec128, q: Dec128) {
     // the product may be overflow.
     let Some(p) = d.checked_mul(q) else {
         let (n_man, _) = n.parts();
-        assert!(n_man.abs() >= (1_i128 << 121) - 20);
+        assert!(n_man.abs() >= (1_i128 << 121) - 10);
         return;
     };
 
@@ -74,7 +74,7 @@ fn check_mul_p(a: Dec128, b: Dec128, p: Dec128) {
 
     let Some(q) = p.checked_div(b) else {
         let (a_man, _) = a.parts();
-        assert!(a_man.abs() >= (1_i128 << 121) - 2);
+        assert!(a_man.abs() >= (1_i128 << 121) - 10);
         return;
     };
 

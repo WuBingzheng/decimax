@@ -52,9 +52,11 @@ pub trait UnderlyingInt:
 
     type Signed: Display;
 
+    // to pack and unpack
     fn to_signed(self, sign: u8) -> Self::Signed;
     fn from_signed(s: Self::Signed) -> (Self, u8);
 
+    // to decode and encode the scale
     fn as_u32(self) -> u32;
     fn from_u32(n: u32) -> Self;
 
@@ -63,15 +65,18 @@ pub trait UnderlyingInt:
     // caller has made sure that no overflow
     fn mul_exp(self, iexp: u32) -> Self;
 
+    // the implementation need to check if overflow
     fn checked_mul_exp(self, iexp: u32) -> Option<Self>;
 
+    // caller has made sure that @iexp is in range
+    // remember to round the result
     fn div_exp(self, iexp: u32) -> Self;
 
+    // calculate `self * right` with sum of scales
     fn mul_with_sum_scale(self, right: Self, sum_scale: u32) -> Option<(Self, u32)>;
 
+    // calculate `self / right` with scales
     fn div_with_scales(self, d: Self, s_scale: u32, d_scale: u32) -> Option<(Self, u32)>;
-
-    fn div_rem(self, right: Self) -> (Self, Self);
 }
 
 impl<I: UnderlyingInt> Decimal<I> {
@@ -110,7 +115,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     where
         S: Into<I::Signed>,
     {
-        Self::try_from_parts(mantissa, scale).unwrap()
+        Self::try_from_parts(mantissa, scale).expect("invalid decimal input parts")
     }
 
     pub fn try_from_parts<S>(mantissa: S, scale: u32) -> Option<Self>
