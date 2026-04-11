@@ -1,0 +1,22 @@
+[package]
+name = "lean-decimal-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { features = ["derive"], version = "1.0" }
+libfuzzer-sys = "0.4"
+
+[dependencies.lean-decimal]
+path = ".."
+
+[[bin]]
+name = "self_proof"
+path = "fuzz_targets/self_proof.rs"
+test = false
+doc = false
+bench = false

@@ -17,11 +17,7 @@ impl UnderlyingInt for u128 {
         if sign == 0 { i } else { -i }
     }
     fn from_signed(s: Self::Signed) -> (Self, u8) {
-        if s >= 0 {
-            (s as u128, 0)
-        } else {
-            ((-s) as u128, 1)
-        }
+        (s.unsigned_abs(), (s < 0) as u8)
     }
 
     fn as_u32(self) -> u32 {
@@ -63,18 +59,12 @@ impl UnderlyingInt for u128 {
         unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, iexp) }
     }
 
-    fn div_rem_exp(self, iexp: u32) -> (Self, Self) {
-        let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(self, iexp) };
-        let r = self - q * get_exp(iexp);
-        (q, r)
-    }
-
     fn div_with_scales(self, d: Self, s_scale: u32, d_scale: u32) -> Option<(Self, u32)> {
         let diff_scale = s_scale.saturating_sub(d_scale);
         let max_scale = Self::MAX_SCALE - diff_scale;
 
         // TODO optimize 64-bit
-        let (mut q, r, mut act_scale) = match u32::try_from(d) {
+        let (mut q, mut r, mut act_scale) = match u32::try_from(d) {
             Ok(d) => div_with_scales_by32(self, d, max_scale),
             Err(_) => div_with_scales_full(self, d, max_scale),
         };
@@ -82,11 +72,7 @@ impl UnderlyingInt for u128 {
         // scale at least
         let min_scale = d_scale.saturating_sub(s_scale);
         if act_scale < min_scale {
-            let need = min_scale - act_scale;
-            q = q.checked_mul_exp(need)?;
-            if q > u128::MAX_MATISSA {
-                return None;
-            }
+            (q, r) = increase_scale(q, r, d, min_scale - act_scale)?;
             act_scale = min_scale;
         }
         // try best to reduce the scale
@@ -117,7 +103,10 @@ impl UnderlyingInt for u128 {
 }
 
 fn get_exp(i: u32) -> u128 {
-    debug_assert!(i <= 36);
+    // Although in most cases, 36 (which is MAX_SCALE) is enough,
+    // but in some cases we need more.
+    debug_assert!(i < 39);
+
     unsafe { *ALL_EXPS.get_unchecked(i as usize) }
 }
 
@@ -211,6 +200,17 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
     (n, max_scale - left_scale)
 }
 
+#[cold]
+fn increase_scale(q: u128, r: u128, d: u128, scale: u32) -> Option<(u128, u128)> {
+    let (q2, r2) = r.checked_mul_exp(scale)?.div_rem(d);
+    let q = q.checked_mul_exp(scale)?.checked_add(q2)?;
+    if q <= u128::MAX_MATISSA {
+        Some((q, r2))
+    } else {
+        None
+    }
+}
+
 fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u32)> {
     let (high, low) = mul2(a, b);
 
@@ -279,7 +279,15 @@ fn big128_with_sum_scale(man: u128, sum_scale: u32) -> Option<(u128, u32)> {
     if clear_digits == 0 {
         Some((man, sum_scale))
     } else {
-        Some((man.div_exp(clear_digits), sum_scale - clear_digits))
+        // can not call div_exp() because @man may be larger than MAX_MANTASSI
+        let mut q = unsafe { div_pow10::bit128::unchecked_div_single(man, clear_digits) };
+        let exp = get_exp(clear_digits);
+        let r = man - q * exp;
+        if r >= exp / 2 {
+            q += 1;
+        }
+
+        Some((q, sum_scale - clear_digits))
     }
 }
 

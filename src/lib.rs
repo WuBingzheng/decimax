@@ -1,9 +1,13 @@
+#![no_std]
+#![doc = include_str!("../README.md")]
+
 mod int128;
 
 use core::cmp::Ordering;
 use core::fmt::{self, Debug, Display};
 use core::ops::{
-    Add, AddAssign, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Shr, Sub, SubAssign,
+    Add, AddAssign, BitAnd, BitOr, BitXor, Div, DivAssign, Mul, MulAssign, Neg, Rem, Shl, Shr, Sub,
+    SubAssign,
 };
 
 #[derive(Copy, Clone, Hash, Default)]
@@ -68,12 +72,6 @@ pub trait UnderlyingInt:
     fn div_with_scales(self, d: Self, s_scale: u32, d_scale: u32) -> Option<(Self, u32)>;
 
     fn div_rem(self, right: Self) -> (Self, Self);
-
-    fn div_rem_exp(self, iexp: u32) -> (Self, Self);
-
-    fn avail_digits(self) -> u32 {
-        bits_to_digits(self.leading_zeros() - Self::META_BITS)
-    }
 }
 
 impl<I: UnderlyingInt> Decimal<I> {
@@ -131,10 +129,6 @@ impl<I: UnderlyingInt> Decimal<I> {
 }
 
 impl<I: UnderlyingInt> Decimal<I> {
-    pub fn checked_add_exact(self, _right: Self) -> Option<Self> {
-        todo!()
-    }
-
     pub fn abs(self) -> Self {
         Self(self.0 << 1 >> 1)
     }
@@ -280,12 +274,6 @@ impl<I: UnderlyingInt> PartialEq for Decimal<I> {
 
 impl<I: UnderlyingInt> Ord for Decimal<I> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
-impl<I: UnderlyingInt> PartialOrd for Decimal<I> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let (a_sign, a_scale, a_man) = self.unpack();
         let (b_sign, b_scale, b_man) = other.unpack();
 
@@ -322,7 +310,12 @@ impl<I: UnderlyingInt> PartialOrd for Decimal<I> {
                 }
             }
         }
-        .into() // Some()
+    }
+}
+
+impl<I: UnderlyingInt> PartialOrd for Decimal<I> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -341,10 +334,22 @@ impl<I: UnderlyingInt> Add for Decimal<I> {
     }
 }
 
+impl<I: UnderlyingInt> AddAssign for Decimal<I> {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 impl<I: UnderlyingInt> Sub for Decimal<I> {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
         self.checked_sub(rhs).expect("substraction overflow")
+    }
+}
+
+impl<I: UnderlyingInt> SubAssign for Decimal<I> {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
     }
 }
 
@@ -355,17 +360,41 @@ impl<I: UnderlyingInt> Mul for Decimal<I> {
     }
 }
 
+impl<I: UnderlyingInt> MulAssign for Decimal<I> {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
 impl<I: UnderlyingInt> Div for Decimal<I> {
     type Output = Self;
     fn div(self, rhs: Self) -> Self::Output {
-        self.checked_div(rhs).expect("division overflow")
+        self.checked_div(rhs).expect("division overflow or by zero")
+    }
+}
+
+impl<I: UnderlyingInt> DivAssign for Decimal<I> {
+    fn div_assign(&mut self, rhs: Self) {
+        *self = *self / rhs;
+    }
+}
+
+impl<I: UnderlyingInt> core::iter::Sum for Decimal<I> {
+    fn sum<Iter: Iterator<Item = Self>>(iter: Iter) -> Self {
+        iter.fold(Self::ZERO, |acc, d| acc + d)
+    }
+}
+
+impl<'a, I: UnderlyingInt> core::iter::Sum<&'a Self> for Decimal<I> {
+    fn sum<Iter: Iterator<Item = &'a Self>>(iter: Iter) -> Self {
+        iter.fold(Self::ZERO, |acc, d| acc + *d)
     }
 }
 
 impl<I: UnderlyingInt> Debug for Decimal<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (iman, scale) = self.parts();
-        write!(f, "Decimal:[{iman} {scale}]")
+        write!(f, "Decimal[{iman} {scale}]")
     }
 }
 
@@ -385,7 +414,7 @@ where
         (&mut b_man, b_scale, &mut a_man, a_scale)
     };
 
-    let small_avail = small_man.avail_digits();
+    let small_avail = bits_to_digits(small_man.leading_zeros() - I::META_BITS);
     let diff = big_scale - small_scale;
 
     if diff <= small_avail {
