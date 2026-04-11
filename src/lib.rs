@@ -183,29 +183,21 @@ impl<I: UnderlyingInt> Decimal<I> {
         let (a_sign, a_scale, a_man) = self.unpack();
         let (b_sign, b_scale, b_man) = right.unpack();
 
-        let is_mul_overflow =
-            a_man.leading_zeros() + b_man.leading_zeros() < I::BITS + I::META_BITS;
+        let (p_man, p_scale) = a_man.mul_with_sum_scale(b_man, a_scale + b_scale)?;
 
-        let (man, scale) = if !is_mul_overflow {
-            let p = a_man * b_man;
-            let sum_scale = a_scale + b_scale;
-            if sum_scale <= I::MAX_SCALE {
-                (p, sum_scale)
-            } else {
-                (p.div_exp(sum_scale - I::MAX_SCALE), I::MAX_SCALE)
-            }
-        } else {
-            a_man.mul_with_sum_scale(b_man, a_scale + b_scale)?
-        };
-
-        Some(Self::pack(a_sign ^ b_sign, scale, man))
+        Some(Self::pack(a_sign ^ b_sign, p_scale, p_man))
     }
 
     pub fn checked_mul_int<S>(self, i: S) -> Option<Self>
     where
         S: Into<I::Signed>,
     {
-        self.checked_mul(Self::try_from_parts(i, 0)?)
+        let (a_sign, a_scale, a_man) = self.unpack();
+        let (b_man, b_sign) = I::from_signed(i.into());
+
+        let (p_man, p_scale) = a_man.mul_with_sum_scale(b_man, a_scale)?;
+
+        Some(Self::pack(a_sign ^ b_sign, p_scale, p_man))
     }
 
     pub fn checked_div(self, right: Self) -> Option<Self> {
@@ -224,7 +216,15 @@ impl<I: UnderlyingInt> Decimal<I> {
     where
         S: Into<I::Signed>,
     {
-        self.checked_div(Self::try_from_parts(i, 0)?)
+        let (a_sign, a_scale, a_man) = self.unpack();
+        let (b_man, b_sign) = I::from_signed(i.into());
+        if b_man == I::ZERO {
+            return None;
+        }
+
+        let (q_man, q_scale) = a_man.div_with_scales(b_man, a_scale, 0)?;
+
+        Some(Self::pack(a_sign ^ b_sign, q_scale, q_man))
     }
 }
 

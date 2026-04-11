@@ -20,7 +20,7 @@ fn mul_base() {
     // fits in u128 (128 bit)
     let a = Dec::from_parts(1_i128 << 60, 6);
     let b = Dec::from_parts(1_i128 << 63, 8);
-    let r = Dec::from_parts(((1_i128 << 123) + 500) / 1000, 6 + 8 - 3);
+    let r = Dec::from_parts(((1_i128 << 123) + 5) / 10, 6 + 8 - 1);
     assert_eq!(a * b, r);
 
     // product of mantissas overflow

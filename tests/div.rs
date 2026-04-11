@@ -19,7 +19,10 @@ fn div_base() {
                     println!("{:?} / {:?} =", n, d);
                     if let Some(q) = n.checked_div(d) {
                         println!("  {:?}", q);
-                        assert!((n - d * q).abs().checked_mul_int(2).unwrap() <= d);
+                        let p = d * q;
+                        let diff = n - p;
+                        println!("  {:?} {:?}", p, diff);
+                        assert!(diff.abs().checked_mul_int(2).unwrap() <= d);
                     }
                 }
             }

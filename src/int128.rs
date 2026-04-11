@@ -35,34 +35,18 @@ impl UnderlyingInt for u128 {
         self.leading_zeros()
     }
 
+    #[inline]
     fn mul_with_sum_scale(self, right: Self, sum_scale: u32) -> Option<(Self, u32)> {
-        let (high, low) = mul2(self, right);
-
-        // Calculate the digits that needed be cleared.
-        // We do not calculate it accurately for performance.
-        // The clear_digits may be bigger than needed.
-        let clear_bits = 128 + Self::META_BITS - high.leading_zeros(); // ignore @low
-        let mut clear_digits = bits_to_digits(clear_bits) + 1; // +1 for ceiling
-
-        // Reduce sum_scale if too big.
-        if sum_scale > Self::MAX_SCALE {
-            clear_digits = clear_digits.max(sum_scale - Self::MAX_SCALE);
+        if self.leading_zeros() + right.leading_zeros() >= Self::BITS + Self::META_BITS {
+            let p = self * right;
+            if sum_scale <= Self::MAX_SCALE {
+                Some((p, sum_scale))
+            } else {
+                Some((p.div_exp(sum_scale - Self::MAX_SCALE), Self::MAX_SCALE))
+            }
+        } else {
+            mul_with_sum_scale_full(self, right, sum_scale)
         }
-
-        // overflow
-        if clear_digits > sum_scale {
-            return None;
-        }
-
-        let (mut q, r) =
-            unsafe { div_pow10::bit128::unchecked_div_double(high, low, clear_digits) };
-
-        // rounding
-        if r >= get_exp(clear_digits) / 2 {
-            q += 1;
-        }
-
-        Some((q, sum_scale - clear_digits))
     }
 
     // caller must make sure that no overflow
@@ -225,6 +209,78 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
         }
     }
     (n, max_scale - left_scale)
+}
+
+fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u32)> {
+    let (high, low) = mul2(a, b);
+
+    if high == 0 {
+        // the production is in range [MAX_MATISSA / 2, u128::MAX]
+        return big128_with_sum_scale(low, sum_scale);
+    }
+
+    // check the mantissa @high..@low
+    //
+    // It's hard to calculate how many digits to shrink exactly, so here we
+    // get the ceiling value @clear_digits, which may be 1 more than need.
+    // The value may be MAX_SCALE+1 at biggest.
+    let bits = 128 + u128::META_BITS - high.leading_zeros();
+    let mut clear_digits = bits_to_digits(bits) + 1; // +1 for ceiling
+
+    // check the scale @sum_scale
+    if sum_scale > u128::MAX_SCALE {
+        clear_digits = clear_digits.max(sum_scale - u128::MAX_SCALE);
+    } else if clear_digits > sum_scale {
+        if clear_digits == sum_scale + 1 {
+            // Corner case. The @clear_digits maybe 1 more than need.
+            clear_digits -= 1;
+        } else {
+            return None;
+        }
+    }
+
+    // rounding
+    // TODO will this make the q overflow?
+    let (low, carry) = low.overflowing_add(get_exp(clear_digits) / 2);
+    let high = high + carry as u128;
+
+    let (q, _r) = unsafe { div_pow10::bit128::unchecked_div_double(high, low, clear_digits) };
+
+    // handle the corner case above
+    if q > u128::MAX_MATISSA {
+        debug_assert_eq!(clear_digits, sum_scale);
+        return None;
+    }
+
+    Some((q, sum_scale - clear_digits))
+}
+
+#[cold]
+fn big128_with_sum_scale(man: u128, sum_scale: u32) -> Option<(u128, u32)> {
+    // check the mantissa @man
+    let mut clear_digits = if man > u128::MAX_MATISSA * 100 {
+        3
+    } else if man > u128::MAX_MATISSA * 10 {
+        2
+    } else if man > u128::MAX_MATISSA {
+        1
+    } else {
+        0
+    };
+
+    // check the scale @sum_scale
+    if sum_scale > u128::MAX_SCALE {
+        clear_digits = clear_digits.max(sum_scale - u128::MAX_SCALE);
+    } else if clear_digits > sum_scale {
+        return None; // overflow
+    }
+
+    // rescale if need
+    if clear_digits == 0 {
+        Some((man, sum_scale))
+    } else {
+        Some((man.div_exp(clear_digits), sum_scale - clear_digits))
+    }
 }
 
 fn div_with_scales_by32(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
