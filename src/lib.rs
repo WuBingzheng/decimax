@@ -12,11 +12,16 @@ use core::ops::{Add, AddAssign, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, 
 
 pub use from_str::ParseError;
 
+/// The fast, fixed-precision, floating-point decimal type.
+///
+/// The `I` is the underlying integer type, which could be `u32`, `u64`, `u128`,
+/// representing roughly 5, 35, 36 base-10 significant digits correspondingly.
+/// The maximum scale matches the number of significant digits for each type.
 #[derive(Copy, Clone, Hash, Default)]
 #[repr(transparent)]
 pub struct Decimal<I: UnderlyingInt>(I);
 
-// Underlying Integer
+/// Underlying integer type.
 pub trait UnderlyingInt:
     Sized
     + Clone
@@ -86,8 +91,15 @@ pub trait UnderlyingInt:
 }
 
 impl<I: UnderlyingInt> Decimal<I> {
+    /// Zero.
     pub const ZERO: Self = Self(I::ZERO);
+
+    /// The largest value. To be largest, the scale is 0, so this is an
+    /// integer, `2<sup>b</sup> - 1`, where `b` is the mantissa bits,
+    /// which is x, x, 36 for `u32`, `u64`, `u128` correspondingly.
     pub const MAX: Self = Self(I::MAX_MATISSA);
+
+    /// The smallest value. It's the negative of [`Self::MAX`].
     pub const MIN: Self = Self(I::MIN_UNDERINT);
 
     // layout:
@@ -112,11 +124,26 @@ impl<I: UnderlyingInt> Decimal<I> {
         Self(I::from_u32(meta) << I::MATISSA_BITS | mantissa)
     }
 
+    /// Deconstruct the decimal into signed mantissa and scale.
     pub fn parts(self) -> (I::Signed, u32) {
         let (sign, scale, man) = self.unpack();
         (I::to_signed(man, sign), scale)
     }
 
+    /// Construct a decimal from signed mantissa and scale.
+    ///
+    /// # Panic:
+    ///
+    /// If the mantissa or scale is out of range. Use [`Self::try_from_parts`]
+    /// for the checking version.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::Decimal;
+    /// let d = Decimal::<u128>::from_parts(314, 2);
+    /// assert_eq!(d.to_string(), "3.14");
+    /// ```
     pub fn from_parts<S>(mantissa: S, scale: u32) -> Self
     where
         S: Into<I::Signed>,
@@ -124,6 +151,20 @@ impl<I: UnderlyingInt> Decimal<I> {
         Self::try_from_parts(mantissa, scale).expect("invalid decimal input parts")
     }
 
+    /// Construct a decimal from signed mantissa and scale.
+    ///
+    /// Return `None` if the mantissa or scale is out of range.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::Decimal;
+    /// let d = Decimal::<u128>::try_from_parts(314, 2).unwrap();
+    /// assert_eq!(d.to_string(), "3.14");
+    ///
+    /// let d = Decimal::<u128>::try_from_parts(314, 99); // 99 is out of range
+    /// assert!(d.is_none());
+    /// ```
     pub fn try_from_parts<S>(mantissa: S, scale: u32) -> Option<Self>
     where
         S: Into<I::Signed>,

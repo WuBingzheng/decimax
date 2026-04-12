@@ -1,15 +1,34 @@
 use core::cmp::Ordering;
-use core::fmt::{self, Debug};
+use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use crate::{Decimal, UnderlyingInt};
+use crate::{Decimal, UnderlyingInt, bits_to_digits};
 
 impl<I: UnderlyingInt> Decimal<I> {
+    /// Computes the absolute value of self.
     #[must_use]
     pub fn abs(self) -> Self {
         Self(self.0 << 1 >> 1)
     }
 
+    /// Computes the addition.
+    ///
+    /// Return `None` if overflow.
+    ///
+    /// There may loss precision if the scales of the 2 operands differ too greatly.
+    /// It's a classic [round-off errors](https://en.wikipedia.org/wiki/Floating-point_arithmetic#Addition_and_subtraction).
+    /// of floating-point calculation.
+    ///
+    /// # Examples:
+    ///
+    ///
+    /// ```
+    /// use lean_decimal::Decimal;
+    /// let a = Decimal::<u128>::from_parts(123, 2);
+    /// let b = Decimal::<u128>::from_parts(1, 4);
+    /// let sum = Decimal::<u128>::from_parts(12301, 4);
+    /// assert_eq!(a.checked_add(b).unwrap(), sum);
+    /// ```
     #[must_use]
     pub fn checked_add(self, right: Self) -> Option<Self> {
         let (b_sign, b_scale, b_man) = right.unpack();
@@ -116,16 +135,22 @@ impl<I: UnderlyingInt> Decimal<I> {
 }
 
 impl<I: UnderlyingInt> Decimal<I> {
+    /// Return if the number is zero.
+    #[must_use]
     pub fn is_zero(self) -> bool {
         let (_, _, man) = self.unpack();
         man == I::ZERO
     }
 
+    /// Return if the number is positive.
+    #[must_use]
     pub fn is_positive(self) -> bool {
         let (sign, _, man) = self.unpack();
         sign == 0 && man != I::ZERO
     }
 
+    /// Return if the number is negative.
+    #[must_use]
     pub fn is_negative(self) -> bool {
         let (sign, _, man) = self.unpack();
         sign != 0 && man != I::ZERO
@@ -284,7 +309,7 @@ impl<'a, I: UnderlyingInt> core::iter::Sum<&'a Self> for Decimal<I> {
     }
 }
 
-impl<I: UnderlyingInt> Debug for Decimal<I> {
+impl<I: UnderlyingInt> fmt::Debug for Decimal<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (iman, scale) = self.parts();
         write!(f, "Decimal[{iman} {scale}]")
@@ -321,8 +346,4 @@ where
     }
 
     (a_man, b_man, big_scale)
-}
-
-pub(crate) fn bits_to_digits(bits: u32) -> u32 {
-    bits * 1233 >> 12 // math!
 }

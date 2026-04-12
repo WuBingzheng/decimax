@@ -48,7 +48,7 @@ isn’t so much because this crate is fast, but because `rust_decimal` is slow.
 In this crate, the Decimal is defined as a single integer. Take the 128-bit type
 as example:
 
-```
+```text
 +-+-----+---------------------------+
 |S|scale|  mantissa                 |
 +-+-----+---------------------------+
@@ -60,7 +60,7 @@ mantissa is still computed as one single `u128` value.
 
 In contrast, the definition in `rust_decimal` is as follows:
 
-```
+```text
 +--------+--------+--------+--------+
 | flags  | high   | mid    | low    |
 +--------+--------+--------+--------+
