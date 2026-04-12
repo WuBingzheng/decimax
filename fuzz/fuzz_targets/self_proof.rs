@@ -106,18 +106,9 @@ fn check_format(n: Dec128) {
     assert_eq!(Dec128::from_str(&s).unwrap(), n);
 
     // set precision
-    let (_, scale) = n.parts();
-
     let s = format!("{:.4}", n);
     match Dec128::from_str(&s) {
-        Ok(n2) => {
-            if scale <= 4 {
-                assert_eq!(n2, n);
-                // TODO } else {
-            }
-        }
-        Err(err) => {
-            assert_eq!(err, ParseError::Overflow)
-        }
+        Ok(n2) => assert_eq!(n2, n.round_to(4)),
+        Err(err) => assert_eq!(err, ParseError::Overflow),
     }
 }

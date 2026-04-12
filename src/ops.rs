@@ -5,15 +5,18 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 use crate::{Decimal, UnderlyingInt};
 
 impl<I: UnderlyingInt> Decimal<I> {
+    #[must_use]
     pub fn abs(self) -> Self {
         Self(self.0 << 1 >> 1)
     }
 
+    #[must_use]
     pub fn checked_add(self, right: Self) -> Option<Self> {
         let (b_sign, b_scale, b_man) = right.unpack();
         self.do_add(b_sign, b_scale, b_man)
     }
 
+    #[must_use]
     pub fn checked_sub(self, right: Self) -> Option<Self> {
         let (b_sign, b_scale, b_man) = right.unpack();
         self.do_add(b_sign ^ 1, b_scale, b_man)
@@ -49,6 +52,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         }
     }
 
+    #[must_use]
     pub fn checked_mul(self, right: Self) -> Option<Self> {
         let (a_sign, a_scale, a_man) = self.unpack();
         let (b_sign, b_scale, b_man) = right.unpack();
@@ -58,6 +62,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         Some(Self::pack(a_sign ^ b_sign, p_scale, p_man))
     }
 
+    #[must_use]
     pub fn checked_mul_int<S>(self, i: S) -> Option<Self>
     where
         S: Into<I::Signed>,
@@ -70,6 +75,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         Some(Self::pack(a_sign ^ b_sign, p_scale, p_man))
     }
 
+    #[must_use]
     pub fn checked_div(self, right: Self) -> Option<Self> {
         let (a_sign, a_scale, a_man) = self.unpack();
         let (b_sign, b_scale, b_man) = right.unpack();
@@ -82,6 +88,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         Some(Self::pack(a_sign ^ b_sign, q_scale, q_man))
     }
 
+    #[must_use]
     pub fn checked_div_int<S>(self, i: S) -> Option<Self>
     where
         S: Into<I::Signed>,
@@ -95,6 +102,16 @@ impl<I: UnderlyingInt> Decimal<I> {
         let (q_man, q_scale) = a_man.div_with_scales(b_man, a_scale, 0)?;
 
         Some(Self::pack(a_sign ^ b_sign, q_scale, q_man))
+    }
+
+    #[must_use]
+    pub fn round_to(self, dst_scale: u32) -> Self {
+        let (a_sign, a_scale, a_man) = self.unpack();
+        if dst_scale >= a_scale {
+            return self;
+        }
+        let new_man = a_man.div_exp(a_scale - dst_scale);
+        Self::pack(a_sign, dst_scale, new_man)
     }
 }
 
