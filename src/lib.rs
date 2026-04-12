@@ -1,6 +1,9 @@
 #![no_std]
 #![doc = include_str!("../README.md")]
 
+mod display;
+mod from_str;
+
 mod int128;
 
 use core::cmp::Ordering;
@@ -9,6 +12,8 @@ use core::ops::{
     Add, AddAssign, BitAnd, BitOr, BitXor, Div, DivAssign, Mul, MulAssign, Neg, Rem, Shl, Shr, Sub,
     SubAssign,
 };
+
+pub use from_str::ParseError;
 
 #[derive(Copy, Clone, Hash, Default)]
 #[repr(transparent)]
@@ -41,6 +46,7 @@ pub trait UnderlyingInt:
     const ZERO: Self;
     const ONE: Self;
     const TEN: Self;
+    const HUNDRED: Self;
     const MAX_MATISSA: Self;
     const MIN_UNDERINT: Self;
 
@@ -71,6 +77,9 @@ pub trait UnderlyingInt:
     // caller has made sure that @iexp is in range
     // remember to round the result
     fn div_exp(self, iexp: u32) -> Self;
+
+    // caller has made sure that @iexp is in range
+    fn div_rem_exp(self, iexp: u32) -> (Self, Self);
 
     // calculate `self * right` with sum of scales
     fn mul_with_sum_scale(self, right: Self, sum_scale: u32) -> Option<(Self, u32)>;

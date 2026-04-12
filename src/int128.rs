@@ -4,6 +4,7 @@ impl UnderlyingInt for u128 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
     const TEN: Self = 10;
+    const HUNDRED: Self = 100;
     const MAX_MATISSA: Self = Self::MAX >> Self::META_BITS;
     const MIN_UNDERINT: Self = (1 << 127) | Self::MAX_MATISSA;
 
@@ -46,6 +47,12 @@ impl UnderlyingInt for u128 {
 
         // SAFETY: self < MAX_MANTISSA, so n fits in 127-bit
         unsafe { div_pow10::bit128::unchecked_div_single_r1b(n, iexp) }
+    }
+
+    fn div_rem_exp(self, iexp: u32) -> (Self, Self) {
+        // SAFETY: self < MAX_MANTISSA, so n fits in 127-bit
+        let q = unsafe { div_pow10::bit128::unchecked_div_single_r1b(self, iexp) };
+        (q, self - q * get_exp(iexp))
     }
 
     #[inline]

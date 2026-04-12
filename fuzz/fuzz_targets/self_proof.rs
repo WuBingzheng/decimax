@@ -1,8 +1,9 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
+use std::str::FromStr;
 
-use lean_decimal::Decimal;
+use lean_decimal::{Decimal, ParseError};
 
 type Dec128 = Decimal<u128>;
 
@@ -36,6 +37,9 @@ fn do_test(data: Data) -> Option<()> {
     } else {
         assert!(d > n);
     }
+
+    check_format(n);
+    check_format(d);
 
     Some(())
 }
@@ -94,5 +98,26 @@ fn check_mul_p(a: Dec128, b: Dec128, p: Dec128) {
     if iexp < 39 {
         let x = (diff_man * b_man).abs();
         assert!(x <= 10_i128.pow(iexp));
+    }
+}
+
+fn check_format(n: Dec128) {
+    let s = format!("{n}");
+    assert_eq!(Dec128::from_str(&s).unwrap(), n);
+
+    // set precision
+    let (_, scale) = n.parts();
+
+    let s = format!("{:.4}", n);
+    match Dec128::from_str(&s) {
+        Ok(n2) => {
+            if scale <= 4 {
+                assert_eq!(n2, n);
+                // TODO } else {
+            }
+        }
+        Err(err) => {
+            assert_eq!(err, ParseError::Overflow)
+        }
     }
 }
