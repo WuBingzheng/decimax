@@ -1,5 +1,5 @@
 use core::fmt;
-use std::str::FromStr;
+use core::str::FromStr;
 
 use crate::{Decimal, UnderlyingInt};
 

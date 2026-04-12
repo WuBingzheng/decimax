@@ -4,7 +4,7 @@ use core::mem::MaybeUninit;
 use crate::{Decimal, UnderlyingInt};
 
 impl<I: UnderlyingInt> fmt::Display for Decimal<I> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (sign, scale, man) = self.unpack();
 
         let mut buf: [MaybeUninit<u8>; 80] = [MaybeUninit::uninit(); 80];
