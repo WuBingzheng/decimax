@@ -27,7 +27,7 @@ but *better*.
 This crate has these advantages:
 
 - Much faster. This crate is 2X ~ 6X faster than `rust_decimal` at `+`, `-`
-and `*` operations. While the `/` is more nuanced, with both faster and slower
+and `*` operations. While the `/` is complex, with both faster and slower
 cases. A typical comparison is shown in below chart. See
 the [benchmark](https://github.com/WuBingzheng/lean-decimal/blob/master/benches/README.md)
 for details.
