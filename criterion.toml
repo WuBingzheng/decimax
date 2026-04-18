@@ -1,0 +1,12 @@
+# This configration only works for `cargo criterion`, but not `cargo bench`.
+
+[colors]
+# These are used for the line chart to compare multiple different functions.
+comparison_colors = [
+    {r = 204, g = 52, b = 52},  # red
+    {r = 118, g = 194, b = 46}, # green
+    {r = 240, g = 142, b = 40}, # oringe
+    {r = 92, g = 145, b = 206}, # blue   
+    {r = 245, g = 220, b = 110},# yellow
+    {r = 158, g = 122, b = 170},# purple
+]
