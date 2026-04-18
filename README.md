@@ -29,10 +29,10 @@ This crate has these advantages:
 - Much faster. This crate is 2X ~ 6X faster than `rust_decimal` at `+`, `-`
 and `*` operations. While the `/` is complex, with both faster and slower
 cases. A typical comparison is shown in below chart. See
-the [benchmark](https://github.com/WuBingzheng/lean-decimal/blob/master/benches/README.md)
+the [benchmark](https://github.com/WuBingzheng/lean-decimal/blob/v0.1.0/benches/README.md)
 for details.
 
-![Benchmark result](https://raw.githubusercontent.com/WuBingzheng/lean-decimal/refs/heads/main/benches/charts/mul-amd.svg)
+![Benchmark result](https://raw.githubusercontent.com/WuBingzheng/lean-decimal/refs/heads/v0.1.0/benches/charts/mul-amd.svg)
 
 - More significant digits and scale. The 128-bit decimal type in this crate
 has 121 bits for mantissa (about 36 decimal digits in base-10), while `rust_decimal`
@@ -82,7 +82,7 @@ addition implementation
 [of this crate](https://docs.rs/crate/lean-decimal/0.1.0/source/src/lib.rs#32)
 and [of rust_decimal](https://docs.rs/crate/rust_decimal/1.41.0/source/src/ops/add.rs).
 
-In [`rust_decimal`'s documentation](https://docs.rs/rust_decimal/latest/rust_decimal/#comparison-to-other-decimal-implementations),
+In [`rust_decimal`'s documentation](https://docs.rs/rust_decimal/1.41.0/rust_decimal/#comparison-to-other-decimal-implementations),
 it's said that:
 
 >  This structure allows us to make use of algorithmic optimizations to implement
@@ -93,7 +93,7 @@ I don't quite understand this sentence. I have to guess that it was developed
 before Rust's `u128` type was stabilized, when only `u64` or `u32` could be used.
 
 I’m not a performance expert, so the above is just my speculation. However,
-the [benchmark results](https://github.com/WuBingzheng/lean-decimal/blob/master/benches/README.md)
+the [benchmark results](https://github.com/WuBingzheng/lean-decimal/blob/v0.1.0/benches/README.md)
 are objective. Please check it out and run it yourself.
 
 
