@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 arbitrary = { features = ["derive"], version = "1.0" }
 libfuzzer-sys = "0.4"
+primitive_fixed_point_decimal = "1.4.2"
 
 [dependencies.lean-decimal]
 path = ".."
@@ -17,6 +18,13 @@ path = ".."
 [[bin]]
 name = "self_proof"
 path = "fuzz_targets/self_proof.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "by_prim_fpdec"
+path = "fuzz_targets/by_prim_fpdec.rs"
 test = false
 doc = false
 bench = false

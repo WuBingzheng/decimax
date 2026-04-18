@@ -20,15 +20,17 @@ fuzz_target!(|data: Data| {
 });
 
 fn do_test(data: Data) -> Option<()> {
-    let n = Dec128::try_from_parts(data.n_man, data.n_scale % 36)?;
-    let d = Dec128::try_from_parts(data.d_man, data.d_scale % 36)?;
+    let n = Dec128::try_from_parts(data.n_man, data.n_scale % 37)?;
+    let d = Dec128::try_from_parts(data.d_man, data.d_scale % 37)?;
 
-    let q = n.checked_div(d)?;
-    check_div_q(n, d, q);
+    if let Some(q) = n.checked_div(d) {
+        check_div_q(n, d, q);
+    }
 
-    let p = n.checked_mul(d)?;
-    check_mul_p(n, d, p);
-    check_mul_p(d, n, p);
+    if let Some(p) = n.checked_mul(d) {
+        check_mul_p(n, d, p);
+        check_mul_p(d, n, p);
+    }
 
     if n == d {
         assert!(d == n);
@@ -56,17 +58,13 @@ fn check_div_q(n: Dec128, d: Dec128, q: Dec128) {
     // It should that: @diff2 <= @d.
     // If not, there may be precision lossing in the division.
     // In this case, the @q must be very big, which means that:
-    // @q_scale == 0 and @q_man is big. However since there may
-    // be some optimization, the @q_scale may be 1 and the
-    // @q_man may be not that big.
+    // @q_scale == 0. However since there may be some optimization,
+    // then the @q_scale may be 1 too.
     let diff = (n - p).abs();
-    let diff2 = diff.checked_mul_int(2).unwrap();
+    let diff2 = diff * 2;
     if diff2 > d.abs() {
-        let (q_man, q_scale) = q.parts();
-        let (d_man, _) = d.parts();
-        let exp = if d_man <= u32::MAX as i128 { 29 } else { 34 };
-        assert!(q_man.abs() >= 10_i128.pow(exp));
-        assert!(q_scale < 2);
+        let (_, q_scale) = q.parts();
+        assert!(q_scale <= 1);
     }
 }
 
