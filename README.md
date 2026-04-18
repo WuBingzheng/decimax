@@ -118,3 +118,16 @@ assert_eq!(a + b, Dec128::from_parts(246456, 3)); // 123 + 123.456 = 246.456
 // Multiplication and division can operate with short integers and decimals too.
 assert_eq!(b * 2, Dec128::from_parts(246912, 3)); // 123.456 * 2 = 246.912
 ```
+
+
+# Status
+
+Only basic arithmetic operations and conversion are available right now,
+though all of them have been fully tested.
+
+TODO list:
+
+- Work with `f32` and `f64`,
+- 64-bit and 32-bit types,
+- Unsigned types,
+- Some serializing features.
