@@ -19,8 +19,9 @@ pub type Dec128 = Decimal<u128>;
 
 /// The decimal type.
 ///
-/// The `I` is the underlying integer type, which could be `u32`, `u64`, or `u128`.
-/// They have aliases [`Dec32`], [`Dec64`] and [`Dec128`] respectively.
+/// The `I` is the underlying integer type. It supports `u128` only by now,
+/// and will support `u64` and `u32` in next version.
+/// They have aliases [`Dec128`], `Dec64` and `Dec32` respectively.
 #[derive(Copy, Clone, Default)]
 #[repr(transparent)]
 pub struct Decimal<I: UnderlyingInt>(I);
@@ -99,8 +100,8 @@ impl<I: UnderlyingInt> Decimal<I> {
     pub const ZERO: Self = Self(I::ZERO);
 
     /// The largest value. To be largest, the scale is 0, so this is an
-    /// integer, `2<sup>b</sup> - 1`, where `b` is the mantissa bits,
-    /// which is x, x, 36 for `u32`, `u64`, `u128` correspondingly.
+    /// integer, `2^b - 1`, where `b` is the mantissa bits, which is
+    /// 121, 58, 27 for [`Dec128`], `Dec64` and `Dec32` correspondingly.
     pub const MAX: Self = Self(I::MAX_MATISSA);
 
     /// The smallest value. It's the negative of [`Self::MAX`].
@@ -129,6 +130,16 @@ impl<I: UnderlyingInt> Decimal<I> {
     }
 
     /// Deconstruct the decimal into signed mantissa and scale.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::Dec128;
+    /// use core::str::FromStr;
+    ///
+    /// let d = Dec128::from_str("3.14").unwrap();
+    /// assert_eq!(d.parts(), (314, 2));
+    /// ```
     pub fn parts(self) -> (I::Signed, u32) {
         let (sign, scale, man) = self.unpack();
         (I::to_signed(man, sign), scale)
