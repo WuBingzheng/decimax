@@ -3,6 +3,23 @@ use core::mem::MaybeUninit;
 
 use crate::{Decimal, UnderlyingInt};
 
+/// Display the decimal.
+///
+/// It supports some [formatting options](https://doc.rust-lang.org/std/fmt/index.html#formatting-parameters):
+/// width, fill, alignment, precision, sign and 0-fill.
+///
+/// Examples:
+///
+/// ```
+/// use lean_decimal::Dec128;
+/// let d = Dec128::from_parts(12_3470, 4);
+///
+/// assert_eq!(format!("{}", d), "12.3470");
+/// assert_eq!(format!("{:.6}", d), "12.347000"); // set precision: pad 0
+/// assert_eq!(format!("{:.2}", d), "12.35"); // set smaller precision: round the number
+/// assert_eq!(format!("{:x>10}", d), "xxx12.3470"); // set width, fill, alignment
+/// assert_eq!(format!("{:+}", d), "+12.3470"); // set sign
+
 impl<I: UnderlyingInt> fmt::Display for Decimal<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (sign, scale, man) = self.unpack();
@@ -13,9 +30,7 @@ impl<I: UnderlyingInt> fmt::Display for Decimal<I> {
         let offset = display_num(man, scale, f.precision(), &mut buf);
 
         // SAFETY: offset is updated along with buf
-        let buf = unsafe {
-            core::slice::from_raw_parts(buf[offset..].as_ptr().cast(), buf.len() - offset)
-        };
+        let buf = unsafe { buf[offset..].assume_init_ref() };
 
         // SAFETY: all data is valid charactor
         let s = unsafe { str::from_utf8_unchecked(buf) };

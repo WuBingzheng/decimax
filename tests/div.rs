@@ -16,13 +16,13 @@ fn div_base() {
                 for d_scale in [0, 4, 10, 25, 36] {
                     let n = Dec::from_parts(n_man, n_scale);
                     let d = Dec::from_parts(d_man, d_scale);
-                    println!("{:?} / {:?} =", n, d);
+                    // println!("{:?} / {:?} =", n, d);
                     if let Some(q) = n.checked_div(d) {
-                        println!("  {:?}", q);
+                        // println!("  {:?}", q);
                         let p = d * q;
                         let diff = n - p;
-                        println!("  {:?} {:?}", p, diff);
-                        assert!(diff.abs().checked_mul_int(2).unwrap() <= d);
+                        // println!("  {:?} {:?}", p, diff);
+                        assert!(diff.abs() * 2 <= d);
                     }
                 }
             }

@@ -6,18 +6,22 @@ mod from_str;
 mod ops;
 
 mod int128;
+// mod int64;
+// mod int32;
 
 use core::fmt::{Debug, Display};
 use core::ops::{Add, AddAssign, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, Sub, SubAssign};
 
 pub use from_str::ParseError;
 
-/// The fast, fixed-precision, floating-point decimal type.
+/// The 128-bit decimal type, with about 36 significant digits in base-10 and scale in [0, 36].
+pub type Dec128 = Decimal<u128>;
+
+/// The decimal type.
 ///
-/// The `I` is the underlying integer type, which could be `u32`, `u64`, `u128`,
-/// representing roughly 5, 35, 36 base-10 significant digits correspondingly.
-/// The maximum scale matches the number of significant digits for each type.
-#[derive(Copy, Clone, Hash, Default)]
+/// The `I` is the underlying integer type, which could be `u32`, `u64`, or `u128`.
+/// They have aliases [`Dec32`], [`Dec64`] and [`Dec128`] respectively.
+#[derive(Copy, Clone, Default)]
 #[repr(transparent)]
 pub struct Decimal<I: UnderlyingInt>(I);
 
@@ -134,14 +138,14 @@ impl<I: UnderlyingInt> Decimal<I> {
     ///
     /// # Panic:
     ///
-    /// If the mantissa or scale is out of range. Use [`Self::try_from_parts`]
-    /// for the checking version.
+    /// Panic if the mantissa or scale is out of range. Use [`Self::try_from_parts`]
+    /// for the checked version.
     ///
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Decimal;
-    /// let d = Decimal::<u128>::from_parts(314, 2);
+    /// use lean_decimal::Dec128;
+    /// let d = Dec128::from_parts(314, 2);
     /// assert_eq!(d.to_string(), "3.14");
     /// ```
     pub fn from_parts<S>(mantissa: S, scale: u32) -> Self
@@ -158,11 +162,11 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Decimal;
-    /// let d = Decimal::<u128>::try_from_parts(314, 2).unwrap();
+    /// use lean_decimal::Dec128;
+    /// let d = Dec128::try_from_parts(314, 2).unwrap();
     /// assert_eq!(d.to_string(), "3.14");
     ///
-    /// let d = Decimal::<u128>::try_from_parts(314, 99); // 99 is out of range
+    /// let d = Dec128::try_from_parts(314, 99); // 99 is out of range
     /// assert!(d.is_none());
     /// ```
     pub fn try_from_parts<S>(mantissa: S, scale: u32) -> Option<Self>
@@ -178,7 +182,53 @@ impl<I: UnderlyingInt> Decimal<I> {
         }
         Some(Self::pack(sign, scale, man))
     }
+
+    /// Return the underlying integer.
+    ///
+    /// You should not try to decode this integer yourself.
+    /// You should just hold this and load it later.
+    pub const fn underlying(self) -> I {
+        self.0
+    }
+
+    /// Load from underlying integer, which should only be got from [`Self::underlying`].
+    ///
+    /// # Panic:
+    ///
+    /// Panic if invalid. Use [`Self::try_from_underlying`] for checked version.
+    pub fn from_underlying(ui: I) -> Self {
+        Self::try_from_underlying(ui).expect("invalid underlying integer")
+    }
+
+    /// Load from underlying integer, which should only be got from [`Self::underlying`].
+    pub fn try_from_underlying(ui: I) -> Option<Self> {
+        let meta = (ui >> I::MATISSA_BITS).as_u32();
+        let scale = meta & ((1 << I::SCALE_BITS) - 1);
+        if scale > I::MAX_SCALE {
+            None
+        } else {
+            Some(Self(ui))
+        }
+    }
+
+    /// Load from underlying integer, which should only be got from [`Self::underlying`].
+    ///
+    /// SAFETY: It's safe if you make sure the integer was got from [`Self::underlying`].
+    pub const unsafe fn unchecked_from_underlying(ui: I) -> Self {
+        Self(ui)
+    }
 }
+
+macro_rules! convert_from_int {
+    ($decimal_int:ty, $decimal_signed:ty; $($from_int:ty),*) => {$(
+        impl From<$from_int> for Decimal<$decimal_int> {
+            fn from(value: $from_int) -> Self {
+                Self::from_parts(value as $decimal_signed, 0)
+            }
+        }
+    )*};
+}
+convert_from_int!(u128, i128; i8, u8, i16, u16, i32, u32, i64, u64);
 
 pub(crate) fn bits_to_digits(bits: u32) -> u32 {
     bits * 1233 >> 12 // math!

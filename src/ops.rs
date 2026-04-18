@@ -21,12 +21,11 @@ impl<I: UnderlyingInt> Decimal<I> {
     ///
     /// # Examples:
     ///
-    ///
     /// ```
-    /// use lean_decimal::Decimal;
-    /// let a = Decimal::<u128>::from_parts(123, 2);
-    /// let b = Decimal::<u128>::from_parts(1, 4);
-    /// let sum = Decimal::<u128>::from_parts(12301, 4);
+    /// use lean_decimal::Dec128;
+    /// let a = Dec128::from_parts(123, 2); // 1.23
+    /// let b = Dec128::from_parts(1, 4);   // 0.0001
+    /// let sum = Dec128::from_parts(12301, 4); // 1.2301
     /// assert_eq!(a.checked_add(b).unwrap(), sum);
     /// ```
     #[must_use]
@@ -35,6 +34,23 @@ impl<I: UnderlyingInt> Decimal<I> {
         self.do_add(b_sign, b_scale, b_man)
     }
 
+    /// Computes the addition.
+    ///
+    /// Return `None` if overflow.
+    ///
+    /// There may loss precision if the scales of the 2 operands differ too greatly.
+    /// It's a classic [round-off errors](https://en.wikipedia.org/wiki/Floating-point_arithmetic#Addition_and_subtraction).
+    /// of floating-point calculation.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::Dec128;
+    /// let a = Dec128::from_parts(123, 2); // 1.23
+    /// let b = Dec128::from_parts(1, 4);   // 0.0001
+    /// let diff = Dec128::from_parts(12299, 4); // 1.2299
+    /// assert_eq!(a.checked_sub(b).unwrap(), diff);
+    /// ```
     #[must_use]
     pub fn checked_sub(self, right: Self) -> Option<Self> {
         let (b_sign, b_scale, b_man) = right.unpack();
@@ -71,33 +87,58 @@ impl<I: UnderlyingInt> Decimal<I> {
         }
     }
 
+    /// Computes the multiplication.
+    ///
+    /// Return `None` if overflow.
+    ///
+    /// The right oprand could be short integers or decimals.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::Dec128;
+    /// let a = Dec128::from_parts(123, 2); // 1.23
+    /// let b = Dec128::from_parts(1, 4);   // 0.0001
+    /// let prod = Dec128::from_parts(123, 6); // 0.000123
+    /// assert_eq!(a.checked_mul(b).unwrap(), prod);
+    ///
+    /// // by integer
+    /// let prod = Dec128::from_parts(246, 2); // 2.46
+    /// assert_eq!(a.checked_mul(2).unwrap(), prod);
+    /// ```
     #[must_use]
-    pub fn checked_mul(self, right: Self) -> Option<Self> {
+    pub fn checked_mul(self, right: impl Into<Self>) -> Option<Self> {
         let (a_sign, a_scale, a_man) = self.unpack();
-        let (b_sign, b_scale, b_man) = right.unpack();
+        let (b_sign, b_scale, b_man) = right.into().unpack();
 
         let (p_man, p_scale) = a_man.mul_with_sum_scale(b_man, a_scale + b_scale)?;
 
         Some(Self::pack(a_sign ^ b_sign, p_scale, p_man))
     }
 
+    /// Computes the division.
+    ///
+    /// Return `None` if overflow or divied by zero.
+    ///
+    /// The right oprand could be short integers or decimals.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::Dec128;
+    /// let a = Dec128::from_parts(123, 2); // 1.23
+    /// let b = Dec128::from_parts(1, 4);   // 0.0001
+    /// let q = Dec128::from_parts(12300, 0); // 12300
+    /// assert_eq!(a.checked_div(b).unwrap(), q);
+    ///
+    /// // by integer
+    /// let q = Dec128::from_parts(615, 3); // 0.615
+    /// assert_eq!(a.checked_div(2).unwrap(), q);
+    /// ```
     #[must_use]
-    pub fn checked_mul_int<S>(self, i: S) -> Option<Self>
-    where
-        S: Into<I::Signed>,
-    {
+    pub fn checked_div(self, right: impl Into<Self>) -> Option<Self> {
         let (a_sign, a_scale, a_man) = self.unpack();
-        let (b_man, b_sign) = I::from_signed(i.into());
-
-        let (p_man, p_scale) = a_man.mul_with_sum_scale(b_man, a_scale)?;
-
-        Some(Self::pack(a_sign ^ b_sign, p_scale, p_man))
-    }
-
-    #[must_use]
-    pub fn checked_div(self, right: Self) -> Option<Self> {
-        let (a_sign, a_scale, a_man) = self.unpack();
-        let (b_sign, b_scale, b_man) = right.unpack();
+        let (b_sign, b_scale, b_man) = right.into().unpack();
         if b_man == I::ZERO {
             return None;
         }
@@ -107,22 +148,18 @@ impl<I: UnderlyingInt> Decimal<I> {
         Some(Self::pack(a_sign ^ b_sign, q_scale, q_man))
     }
 
-    #[must_use]
-    pub fn checked_div_int<S>(self, i: S) -> Option<Self>
-    where
-        S: Into<I::Signed>,
-    {
-        let (a_sign, a_scale, a_man) = self.unpack();
-        let (b_man, b_sign) = I::from_signed(i.into());
-        if b_man == I::ZERO {
-            return None;
-        }
-
-        let (q_man, q_scale) = a_man.div_with_scales(b_man, a_scale, 0)?;
-
-        Some(Self::pack(a_sign ^ b_sign, q_scale, q_man))
-    }
-
+    /// Round to the @dst_scale. Keep @dst_scale fraction decimal fractions.
+    ///
+    /// Do nothing if the original scale is not bigger than @dst_scale
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::Dec128;
+    /// let a = Dec128::from_parts(12345678, 6); // 12.345678
+    /// let b = Dec128::from_parts(1235, 2);   // 12.35
+    /// assert_eq!(a.round_to(2), b);
+    /// ```
     #[must_use]
     pub fn round_to(self, dst_scale: u32) -> Self {
         let (a_sign, a_scale, a_man) = self.unpack();
@@ -271,28 +308,28 @@ impl<I: UnderlyingInt> SubAssign for Decimal<I> {
     }
 }
 
-impl<I: UnderlyingInt> Mul for Decimal<I> {
+impl<I: UnderlyingInt, R: Into<Self>> Mul<R> for Decimal<I> {
     type Output = Self;
-    fn mul(self, rhs: Self) -> Self::Output {
+    fn mul(self, rhs: R) -> Self::Output {
         self.checked_mul(rhs).expect("multiplication overflow")
     }
 }
 
-impl<I: UnderlyingInt> MulAssign for Decimal<I> {
-    fn mul_assign(&mut self, rhs: Self) {
+impl<I: UnderlyingInt, R: Into<Self>> MulAssign<R> for Decimal<I> {
+    fn mul_assign(&mut self, rhs: R) {
         *self = *self * rhs;
     }
 }
 
-impl<I: UnderlyingInt> Div for Decimal<I> {
+impl<I: UnderlyingInt, R: Into<Self>> Div<R> for Decimal<I> {
     type Output = Self;
-    fn div(self, rhs: Self) -> Self::Output {
+    fn div(self, rhs: R) -> Self::Output {
         self.checked_div(rhs).expect("division overflow or by zero")
     }
 }
 
-impl<I: UnderlyingInt> DivAssign for Decimal<I> {
-    fn div_assign(&mut self, rhs: Self) {
+impl<I: UnderlyingInt, R: Into<Self>> DivAssign<R> for Decimal<I> {
+    fn div_assign(&mut self, rhs: R) {
         *self = *self / rhs;
     }
 }
