@@ -32,7 +32,7 @@ cases. A typical comparison is shown in below chart. See
 the [benchmark](https://github.com/WuBingzheng/lean-decimal/blob/v0.1.0/benches/README.md)
 for details.
 
-![Benchmark result](https://raw.githubusercontent.com/WuBingzheng/lean-decimal/refs/heads/v0.1.0/benches/charts/mul-amd.svg)
+![Benchmark result](https://raw.githubusercontent.com/WuBingzheng/lean-decimal/refs/tags/v0.1.0/benches/charts/mul-amd.svg)
 
 - More significant digits and scale. The 128-bit decimal type in this crate
 has 121 bits for mantissa (about 36 decimal digits in base-10), while `rust_decimal`
