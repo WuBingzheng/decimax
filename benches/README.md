@@ -54,6 +54,8 @@ You can also set the sampling rate to reduce the time:
 SAMPLE=10 cargo bench # run 1/10 tests for each case
 ```
 
+Now let's begin the benchmark.
+
 
 # Benchmark: addition
 
