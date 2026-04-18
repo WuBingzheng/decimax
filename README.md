@@ -93,8 +93,8 @@ I don't quite understand this sentence. I have to guess that it was developed
 before Rust's `u128` type was stabilized, when only `u64` or `u32` could be used.
 
 I’m not a performance expert, so the above is just my speculation. However,
-the benchmark results are objective. Please check it out and run it yourself
-if you are interested.
+the [benchmark results](https://github.com/WuBingzheng/lean-decimal/blob/master/benches/README.md)
+are objective. Please check it out and run it yourself.
 
 
 # Usage
