@@ -75,7 +75,7 @@ During this incremental process, when the value exceeds a threshold, the
 rescale of the first operand will overflow, then we need to find a middle
 scale to rescale both operands.
 
-Now let's see the results:
+Now let's see the results on 3 machines:
 
 ![add-amd result](charts/add-amd.svg)
 ![add-intel result](charts/add-intel.svg)
@@ -116,7 +116,7 @@ decimal’s range. The performance impact of the division is the same in either
 case. For simplicity and to stay consistent with the other operations tests,
 we fix the scale and increase the mantissa.
 
-Now let's see the results:
+Now let's see the results on 3 machines:
 
 ![mul-amd result](charts/mul-amd.svg)
 ![mul-intel result](charts/mul-intel.svg)
@@ -172,11 +172,11 @@ in branch-2 for X<=8, and branch-1 for X>8.
 In the non-evenly test cases, we use Dec128(10^8 + 1, 0) as divisor, and
 keep same for dividends.
 
-Now let's see the results:
+Now let's see the results on 3 machines:
 
-![divide-by-small-amd result](charts/divide-by-small-amd.svg)
-![divide-by-small-intel result](charts/divide-by-small-intel.svg)
-![divide-by-small-apple result](charts/divide-by-small-apple.svg)
+![divide-by-small-amd result](charts/div-by-small-amd.svg)
+![divide-by-small-intel result](charts/div-by-small-intel.svg)
+![divide-by-small-apple result](charts/div-by-small-apple.svg)
 
 For the two `evenly` lines, there is a jump at x=8, as expected. Before the
 jump, `lean-dec` is stable but much slower than `rust-dec`. After the jump,
@@ -189,9 +189,9 @@ For the two `non-evenly` lines, `lean-dec` is stable and faster.
 
 Now let's see the division by big.
 
-![divide-by-big-amd result](charts/divide-by-big-amd.svg)
-![divide-by-big-intel result](charts/divide-by-big-intel.svg)
-![divide-by-big-apple result](charts/divide-by-big-apple.svg)
+![divide-by-big-amd result](charts/div-by-big-amd.svg)
+![divide-by-big-intel result](charts/div-by-big-intel.svg)
+![divide-by-big-apple result](charts/div-by-big-apple.svg)
 
 The results are similar with the above one, except that all becomes slower.
 

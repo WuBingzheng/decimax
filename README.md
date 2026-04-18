@@ -26,10 +26,13 @@ but *better*.
 
 This crate has these advantages:
 
-- Much faster. For most cases of `+`, `-` and `*` operations, this crate is
-2X ~ 6X faster than `rust_decimal`. While the `/` is more nuanced,
-with both faster and slower cases. A typical comparison is shown in below
-chart. See the benchmark for details.
+- Much faster. This crate is 2X ~ 6X faster than `rust_decimal` for `+`, `-`
+and `*` operations. While the `/` is more nuanced, with both faster and slower
+cases. A typical comparison is shown in below chart. See
+the [benchmark](https://github.com/WuBingzheng/lean-decimal/blob/master/benches/README.md)
+for details.
+
+![Benchmark result](https://raw.githubusercontent.com/WuBingzheng/lean-decimal/refs/heads/main/benches/charts/mul-amd.svg)
 
 - More significant digits and scale. The 128-bit decimal type in this crate
 has 121 bits for mantissa (about 36 decimal digits in base-10), while `rust_decimal`
@@ -68,16 +71,18 @@ In contrast, the definition in `rust_decimal` is as follows:
 ```
 
 The mantissa consists of three `u32` components, and each operation requires
-processing these three `u32` values in turn. Additionally, `rust_decimal` is
-heavily optimized for small numbers. During computations, it handles cases
-with 1, 2, and 3 `u32` segments separately. These conditional checks themselves,
-along with the complex logic, may slow down the arithmetic operations.
+processing these three `u32` values in turn. Additionally, `rust_decimal`
+checks whether the two operands are small(32 bit), medium(64 bit), or
+large(96 bit), and uses different computation processes accordingly.
+These conditional checks themselves, along with the complex logic, may
+slow down the arithmetic operations.
 
-You’ll get my point as long as you take a quick look at the code implementing
-[the addition of this crate](xxx)
-and [rust_decimal](https://docs.rs/crate/rust_decimal/latest/source/src/ops/add.rs).
+You’ll get my point as long as you take a quick look at the code of the
+addition implementation
+[of this crate](https://docs.rs/crate/lean-decimal/0.1.0/source/src/lib.rs#32)
+and [of rust_decimal](https://docs.rs/crate/rust_decimal/1.41.0/source/src/ops/add.rs).
 
-In [`rust_decimal`'s document](https://docs.rs/rust_decimal/latest/rust_decimal/#comparison-to-other-decimal-implementations),
+In [`rust_decimal`'s documentation](https://docs.rs/rust_decimal/latest/rust_decimal/#comparison-to-other-decimal-implementations),
 it's said that:
 
 >  This structure allows us to make use of algorithmic optimizations to implement

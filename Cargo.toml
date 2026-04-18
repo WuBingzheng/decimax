@@ -2,10 +2,16 @@
 name = "lean-decimal"
 version = "0.1.0"
 edition = "2024"
+authors = ["Wu Bingzheng <wubingzheng@gmail.com>"]
+description = "Fast, fixed-precision, floating-point decimal types."
+license = "MIT"
+repository = "https://github.com/WuBingzheng/lean-decimal"
+documentation = "https://docs.rs/lean-decimal"
+keywords = ["decimal"]
+categories = ["data-structures", "finance", "mathematics", "no-std", "no-std::no-alloc"]
 
 [dependencies]
-num-traits = {version="0.2", default-features=false}
-div-pow10 = {path="../div-pow10"}
+div-pow10 = "0.1"
 
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports"] }
