@@ -79,7 +79,7 @@ slow down the arithmetic operations.
 
 You’ll get my point as long as you take a quick look at the code of the
 addition implementation
-[of this crate](https://docs.rs/crate/lean-decimal/0.1.0/source/src/lib.rs#32)
+[of this crate](https://docs.rs/crate/lean-decimal/0.1.0/source/src/ops.rs#32)
 and [of rust_decimal](https://docs.rs/crate/rust_decimal/1.41.0/source/src/ops/add.rs).
 
 In [`rust_decimal`'s documentation](https://docs.rs/rust_decimal/1.41.0/rust_decimal/#comparison-to-other-decimal-implementations),
