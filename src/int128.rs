@@ -9,7 +9,7 @@ impl UnderlyingInt for u128 {
     const MIN_UNDERINT: Self = (1 << 127) | Self::MAX_MATISSA;
 
     const BITS: u32 = 128;
-    const MAX_SCALE: u32 = 36;
+    const SCALE_BITS: u32 = 5;
 
     type Signed = i128;
 
@@ -254,9 +254,9 @@ fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u3
 
     // check the scale @sum_scale
     if sum_scale > u128::MAX_SCALE {
-        // normal case
         clear_digits = clear_digits.max(sum_scale - u128::MAX_SCALE);
-    } else if clear_digits > sum_scale {
+    }
+    if clear_digits > sum_scale {
         // edge case, overflow, return None
         if clear_digits == sum_scale + 1 {
             // edge case in edge case. The overflow may be false because
@@ -288,9 +288,7 @@ fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u3
 #[cold]
 fn big128_with_sum_scale(man: u128, sum_scale: u32) -> Option<(u128, u32)> {
     // check the mantissa @man, which is in range [MAX_MATISSA / 2, u128::MAX]
-    let mut clear_digits = if man > u128::MAX_MATISSA * 100 {
-        3
-    } else if man > u128::MAX_MATISSA * 10 {
+    let mut clear_digits = if man > u128::MAX_MATISSA * 10 {
         2
     } else if man > u128::MAX_MATISSA {
         1

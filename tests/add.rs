@@ -33,7 +33,7 @@ fn add_base() {
     let e = Dec::from_parts(1001000, 13);
     test_add(a, d, e);
 
-    let max_mantissa = (1_i128 << 121) - 1;
+    let max_mantissa = (1_i128 << 122) - 1;
 
     // different scales with big mantissa
     let big1 = Dec::from_parts(max_mantissa - 1, 7);
@@ -41,7 +41,7 @@ fn add_base() {
     test_add(a, big1, big2);
 
     // overflow in addition, so reduce scale
-    let big1 = Dec::from_parts(max_mantissa - 1, 10);
+    let big1 = Dec::from_parts(max_mantissa - 3, 10);
     let big2 = Dec::from_parts(max_mantissa / 5, 9);
     test_add(big1, big1, big2);
 

@@ -1,4 +1,4 @@
-Fast, fixed-precision, floating-point decimal types.
+Fast decimal types.
 
 It represents decimal fractions accurately by scaling integers in base-10.
 So there is no round-off error like 0.1 + 0.2 != 0.3.

@@ -58,10 +58,10 @@ pub trait UnderlyingInt:
     const MIN_UNDERINT: Self;
 
     const BITS: u32;
-    const MAX_SCALE: u32;
-    const SCALE_BITS: u32 = (Self::MAX_SCALE * 2 - 1).ilog2();
+    const SCALE_BITS: u32;
     const META_BITS: u32 = 1 + Self::SCALE_BITS;
     const MATISSA_BITS: u32 = Self::BITS - Self::META_BITS;
+    const MAX_SCALE: u32 = 2_u32.pow(Self::SCALE_BITS) - 1;
 
     type Signed: Display;
 

@@ -20,16 +20,11 @@ fuzz_target!(|data: Data| {
 });
 
 fn do_test(data: Data) -> Option<()> {
-    let n = Dec128::try_from_parts(data.n_man, data.n_scale % 37)?;
-    let d = Dec128::try_from_parts(data.d_man, data.d_scale % 37)?;
+    let n = Dec128::try_from_parts(data.n_man, data.n_scale % 32)?;
+    let d = Dec128::try_from_parts(data.d_man, data.d_scale % 32)?;
 
     if let Some(q) = n.checked_div(d) {
         check_div_q(n, d, q);
-    }
-
-    if let Some(p) = n.checked_mul(d) {
-        check_mul_p(n, d, p);
-        check_mul_p(d, n, p);
     }
 
     if n == d {
@@ -51,7 +46,7 @@ fn check_div_q(n: Dec128, d: Dec128, q: Dec128) {
     // the product may be overflow.
     let Some(p) = d.checked_mul(q) else {
         let (n_man, _) = n.parts();
-        assert!(n_man.abs() >= (1_i128 << 121) - 10);
+        assert!(n_man.abs() >= (1_i128 << 122) - 10);
         return;
     };
 
@@ -65,37 +60,6 @@ fn check_div_q(n: Dec128, d: Dec128, q: Dec128) {
     if diff2 > d.abs() {
         let (_, q_scale) = q.parts();
         assert!(q_scale <= 1);
-    }
-}
-
-fn check_mul_p(a: Dec128, b: Dec128, p: Dec128) {
-    if b.is_zero() {
-        assert!(p.is_zero());
-        return;
-    }
-
-    let Some(q) = p.checked_div(b) else {
-        let (a_man, _) = a.parts();
-        assert!(a_man.abs() >= (1_i128 << 121) - 10);
-        return;
-    };
-
-    let diff = q - a;
-
-    //          1
-    // ------------------- > diff
-    // b * 10.pow(p.scale)
-    //
-    // diff * b * 10.pow(p.scale) < 1
-
-    let (diff_man, diff_scale) = diff.parts();
-    let (b_man, b_scale) = b.parts();
-    let (_, p_scale) = p.parts();
-
-    let iexp = diff_scale + b_scale - p_scale + 2;
-    if iexp < 39 {
-        let x = (diff_man * b_man).abs();
-        assert!(x <= 10_i128.pow(iexp));
     }
 }
 

@@ -12,8 +12,8 @@ fn mul_base() {
 
     // sum of scale overflow
     let a = Dec::from_parts(100, 12);
-    let b = Dec::from_parts(300, 26);
-    let r = Dec::from_parts(300, 36);
+    let b = Dec::from_parts(300, 21);
+    let r = Dec::from_parts(300, 31);
     assert_eq!(a * b, r);
 
     // product of mantissas overflow of mantissa(121 bit) but
@@ -26,7 +26,7 @@ fn mul_base() {
     // product of mantissas overflow
     let a = Dec::from_parts(1_i128 << 90, 12);
     let b = Dec::from_parts(1_i128 << 90, 14);
-    let r = Dec::from_parts(153249554086588885835834702715030918_i128, 12 + 14 - 19);
+    let r = Dec::from_parts(1532495540865888858358347027150309184_i128, 12 + 14 - 18);
     assert_eq!(a * b, r);
 
     // overflow

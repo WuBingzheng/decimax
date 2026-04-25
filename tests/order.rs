@@ -34,7 +34,7 @@ fn cmp_base() {
     assert!(-c > -a);
 
     let a = Dec::from_parts(30000, 9);
-    let b = Dec::from_parts(300, 35);
+    let b = Dec::from_parts(300, 31);
     assert!(a > b);
     assert!(b < a);
     assert!(-a < -b);

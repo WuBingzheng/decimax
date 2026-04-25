@@ -24,7 +24,7 @@ fn equal_base() {
     assert_eq!(a, b);
     assert_ne!(a, -b);
 
-    let a = Dec::from_parts(100, 35);
+    let a = Dec::from_parts(100, 31);
     let b = Dec::from_parts(10000, 12);
     assert_ne!(a, b);
     assert_ne!(a, -b);

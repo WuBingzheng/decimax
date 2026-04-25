@@ -20,8 +20,8 @@ fuzz_target!(|data: Data| {
 });
 
 fn do_test(data: Data) -> Option<()> {
-    let n_scale = data.n_scale % 37;
-    let d_scale = data.d_scale % 37;
+    let n_scale = data.n_scale % 32;
+    let d_scale = data.d_scale % 32;
 
     let n = Dec128::try_from_parts(data.n_man, n_scale)?;
     let d = Dec128::try_from_parts(data.d_man, d_scale)?;

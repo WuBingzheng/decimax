@@ -1,11 +1,13 @@
-We benchmark and compare crate `rust_decimal` and this crate `lean_decimal`.
+We benchmark and compare the most popular decimal crate
+[`rust_decimal`](https://crates.io/crates/rust_decimal) and
+this crate [`lean_decimal`](https://crates.io/crates/lean-decimal).
 They are both fixed-precision and floating-point decimal types.
 
 The decimal in `rust_decimal` is 128-bit. While `lean_decimal` also supports 64-bit
 and 32-bit types besides 128-bit. Here we use the 128-bit only to compare.
 
 We benchmark `+`, `*` and `/` operations. The `-` is same with `+` so we do not
-benchmark it again. 
+benchmark it again.
 
 
 # Environment
