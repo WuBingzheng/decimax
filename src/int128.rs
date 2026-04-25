@@ -5,8 +5,11 @@ impl UnderlyingInt for u128 {
     const ONE: Self = 1;
     const TEN: Self = 10;
     const HUNDRED: Self = 100;
-    const MAX_MATISSA: Self = Self::MAX >> Self::META_BITS;
-    const MIN_UNDERINT: Self = (1 << 127) | Self::MAX_MATISSA;
+    const MAX: Self = Self::MAX;
+
+    const UNSIGNED_MAX_MATISSA: Self = Self::MAX >> Self::SCALE_BITS;
+    const SIGNED_MAX_MATISSA: Self = Self::UNSIGNED_MAX_MATISSA >> 1;
+    const SIGNED_MIN_UNDERINT: Self = (1 << (Self::BITS - 1)) | Self::SIGNED_MAX_MATISSA;
 
     const BITS: u32 = 128;
     const SCALE_BITS: u32 = 5;
@@ -56,8 +59,8 @@ impl UnderlyingInt for u128 {
     }
 
     #[inline]
-    fn mul_with_sum_scale(self, right: Self, sum_scale: u32) -> Option<(Self, u32)> {
-        if self.leading_zeros() + right.leading_zeros() >= Self::BITS + Self::META_BITS {
+    fn mul_with_sum_scale<const S: bool>(self, right: Self, sum_scale: u32) -> Option<(Self, u32)> {
+        if self.leading_zeros() + right.leading_zeros() >= Self::BITS + meta_bits::<S>() {
             // fast path, keep the code simple
             let p = self * right;
             if sum_scale <= Self::MAX_SCALE {
@@ -67,25 +70,30 @@ impl UnderlyingInt for u128 {
             }
         } else {
             // full path
-            mul_with_sum_scale_full(self, right, sum_scale)
+            mul_with_sum_scale_full::<S>(self, right, sum_scale)
         }
     }
 
     #[inline]
-    fn div_with_scales(self, d: Self, s_scale: u32, d_scale: u32) -> Option<(Self, u32)> {
+    fn div_with_scales<const S: bool>(
+        self,
+        d: Self,
+        s_scale: u32,
+        d_scale: u32,
+    ) -> Option<(Self, u32)> {
         let diff_scale = s_scale.saturating_sub(d_scale);
         let max_scale = Self::MAX_SCALE - diff_scale;
 
         // TODO optimize 64-bit divisor too
         let (mut q, mut r, mut act_scale) = match u32::try_from(d) {
-            Ok(d) => div_with_scales_by32(self, d, max_scale),
-            Err(_) => div_with_scales_full(self, d, max_scale),
+            Ok(d) => div_with_scales_by32::<S>(self, d, max_scale),
+            Err(_) => div_with_scales_full::<S>(self, d, max_scale),
         };
 
         // increase the scale if d_scale > s_scale
         let min_scale = d_scale.saturating_sub(s_scale);
         if act_scale < min_scale {
-            (q, r) = increase_scale(q, r, d, min_scale - act_scale)?;
+            (q, r) = increase_scale::<S>(q, r, d, min_scale - act_scale)?;
             act_scale = min_scale;
         }
         // reduce the scale if division exactly
@@ -97,7 +105,7 @@ impl UnderlyingInt for u128 {
 
         // round
         if r * 2 >= d {
-            if q == u128::MAX_MATISSA {
+            if q == max_mantissa::<S>() {
                 // The final scale must be 0 (but why?), there is no room to reduce
                 debug_assert_eq!(diff_scale + act_scale - min_scale, 0);
                 return None;
@@ -106,6 +114,21 @@ impl UnderlyingInt for u128 {
         }
 
         Some((q, diff_scale + act_scale - min_scale))
+    }
+}
+
+fn max_mantissa<const S: bool>() -> u128 {
+    if S {
+        u128::SIGNED_MAX_MATISSA
+    } else {
+        u128::UNSIGNED_MAX_MATISSA
+    }
+}
+fn meta_bits<const S: bool>() -> u32 {
+    if S {
+        u128::SCALE_BITS + 1
+    } else {
+        u128::SCALE_BITS
     }
 }
 
@@ -226,22 +249,22 @@ fn reduce_scale_full(mut n: u128, max_scale: u32) -> (u128, u32) {
 }
 
 #[cold]
-fn increase_scale(q: u128, r: u128, d: u128, scale: u32) -> Option<(u128, u128)> {
+fn increase_scale<const S: bool>(q: u128, r: u128, d: u128, scale: u32) -> Option<(u128, u128)> {
     let (q2, r2) = div_rem(r.checked_mul_exp(scale)?, d);
     let q = q.checked_mul_exp(scale)?.checked_add(q2)?;
-    if q <= u128::MAX_MATISSA {
+    if q <= max_mantissa::<S>() {
         Some((q, r2))
     } else {
         None
     }
 }
 
-fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u32)> {
+fn mul_with_sum_scale_full<const S: bool>(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u32)> {
     let (high, low) = mul2(a, b);
 
     if high == 0 {
         // the production @low is in range [MAX_MATISSA / 2, u128::MAX]
-        return big128_with_sum_scale(low, sum_scale);
+        return big128_with_sum_scale::<S>(low, sum_scale);
     }
 
     // check the mantissa @high..@low
@@ -249,7 +272,7 @@ fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u3
     // It's hard to calculate how many digits to shrink exactly, so here we
     // get the ceiling value @clear_digits, which may be 1 more than need.
     // The value may be MAX_SCALE+1 at biggest.
-    let bits = 128 + u128::META_BITS - high.leading_zeros();
+    let bits = 128 + meta_bits::<S>() - high.leading_zeros();
     let mut clear_digits = bits_to_digits(bits) + 1; // +1 for ceiling
 
     // check the scale @sum_scale
@@ -276,7 +299,7 @@ fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u3
     let (q, _r) = unsafe { div_pow10::bit128::unchecked_div_double(high, low, clear_digits) };
 
     // handle the edge case above
-    if q > u128::MAX_MATISSA {
+    if q > max_mantissa::<S>() {
         debug_assert_eq!(clear_digits, sum_scale);
         return None;
     }
@@ -286,11 +309,11 @@ fn mul_with_sum_scale_full(a: u128, b: u128, sum_scale: u32) -> Option<(u128, u3
 
 // reduce the @man to under MAX_MANTISSA
 #[cold]
-fn big128_with_sum_scale(man: u128, sum_scale: u32) -> Option<(u128, u32)> {
+fn big128_with_sum_scale<const S: bool>(man: u128, sum_scale: u32) -> Option<(u128, u32)> {
     // check the mantissa @man, which is in range [MAX_MATISSA / 2, u128::MAX]
-    let mut clear_digits = if man > u128::MAX_MATISSA * 10 {
+    let mut clear_digits = if man > max_mantissa::<S>() * 10 {
         2
-    } else if man > u128::MAX_MATISSA {
+    } else if man > max_mantissa::<S>() {
         1
     } else {
         0
@@ -321,7 +344,7 @@ fn big128_with_sum_scale(man: u128, sum_scale: u32) -> Option<(u128, u32)> {
     }
 }
 
-fn div_with_scales_by32(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
+fn div_with_scales_by32<const S: bool>(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
     let (q, r) = div128_by32(n, d);
     if r == 0 {
         return (q, 0, 0);
@@ -331,7 +354,7 @@ fn div_with_scales_by32(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
     // - r * 10.pow(act_scale) fits in u128 (128-bit)
     // - q * 10.pow(act_scale) fits in mantissa (121-bit)
     // - act_scale <= max_scale
-    let avail_bits = r.leading_zeros().min(q.leading_zeros() - u128::META_BITS);
+    let avail_bits = r.leading_zeros().min(q.leading_zeros() - meta_bits::<S>());
     let act_scale = bits_to_digits(avail_bits).min(max_scale);
     if act_scale == 0 {
         return (q, r, 0);
@@ -344,13 +367,13 @@ fn div_with_scales_by32(n: u128, d: u32, max_scale: u32) -> (u128, u128, u32) {
     (q.mul_exp(act_scale) + q2, r2, act_scale)
 }
 
-fn div_with_scales_full(n: u128, d: u128, max_scale: u32) -> (u128, u128, u32) {
+fn div_with_scales_full<const S: bool>(n: u128, d: u128, max_scale: u32) -> (u128, u128, u32) {
     let (mut q, mut r) = div_rem(n, d);
 
     // long division
     let mut act_scale = 0;
     while r != 0 {
-        let avail_bits = r.leading_zeros().min(q.leading_zeros() - u128::META_BITS);
+        let avail_bits = r.leading_zeros().min(q.leading_zeros() - meta_bits::<S>());
         let scale = bits_to_digits(avail_bits).min(max_scale - act_scale);
         if scale == 0 {
             break;

@@ -14,17 +14,24 @@ use core::ops::{Add, AddAssign, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, 
 
 pub use from_str::ParseError;
 
-/// The 128-bit decimal type, with about 36 significant digits in base-10 and scale in [0, 36].
-pub type Dec128 = Decimal<u128>;
+/// The 128-bit signed decimal type, with about 36 significant digits in base-10 and scale in [0, 31].
+pub type Dec128 = Decimal<u128, true>;
+
+/// The 128-bit unsigned decimal type, with about 36 significant digits in base-10 and scale in [0, 31].
+pub type UDec128 = Decimal<u128, false>;
 
 /// The decimal type.
 ///
 /// The `I` is the underlying integer type. It supports `u128` only by now,
 /// and will support `u64` and `u32` in next version.
-/// They have aliases [`Dec128`], `Dec64` and `Dec32` respectively.
+///
+/// The `S` is for signed or unsigned.
+///
+/// They have aliases [`Dec128`], `Dec64`, `Dec32`, [`UDec128`], `UDec64`
+/// and `UDec32` respectively.
 #[derive(Copy, Clone, Default)]
 #[repr(transparent)]
-pub struct Decimal<I: UnderlyingInt>(I);
+pub struct Decimal<I: UnderlyingInt, const S: bool>(I);
 
 /// Underlying integer type.
 pub trait UnderlyingInt:
@@ -50,17 +57,18 @@ pub trait UnderlyingInt:
     + AddAssign
     + SubAssign
 {
+    const MAX: Self;
     const ZERO: Self;
     const ONE: Self;
     const TEN: Self;
     const HUNDRED: Self;
-    const MAX_MATISSA: Self;
-    const MIN_UNDERINT: Self;
+
+    const UNSIGNED_MAX_MATISSA: Self;
+    const SIGNED_MAX_MATISSA: Self;
+    const SIGNED_MIN_UNDERINT: Self;
 
     const BITS: u32;
     const SCALE_BITS: u32;
-    const META_BITS: u32 = 1 + Self::SCALE_BITS;
-    const MATISSA_BITS: u32 = Self::BITS - Self::META_BITS;
     const MAX_SCALE: u32 = 2_u32.pow(Self::SCALE_BITS) - 1;
 
     type Signed: Display;
@@ -89,45 +97,86 @@ pub trait UnderlyingInt:
     fn div_rem_exp(self, iexp: u32) -> (Self, Self);
 
     // calculate `self * right` with sum of scales
-    fn mul_with_sum_scale(self, right: Self, sum_scale: u32) -> Option<(Self, u32)>;
+    fn mul_with_sum_scale<const S: bool>(self, right: Self, sum_scale: u32) -> Option<(Self, u32)>;
 
     // calculate `self / right` with scales
-    fn div_with_scales(self, d: Self, s_scale: u32, d_scale: u32) -> Option<(Self, u32)>;
+    fn div_with_scales<const S: bool>(
+        self,
+        d: Self,
+        s_scale: u32,
+        d_scale: u32,
+    ) -> Option<(Self, u32)>;
 }
 
-impl<I: UnderlyingInt> Decimal<I> {
+// for signed and unsigned both
+impl<I: UnderlyingInt, const S: bool> Decimal<I, S> {
     /// Zero.
     pub const ZERO: Self = Self(I::ZERO);
 
-    /// The largest value. To be largest, the scale is 0, so this is an
-    /// integer, `2^b - 1`, where `b` is the mantissa bits, which is
-    /// 121, 58, 27 for [`Dec128`], `Dec64` and `Dec32` correspondingly.
-    pub const MAX: Self = Self(I::MAX_MATISSA);
-
-    /// The smallest value. It's the negative of [`Self::MAX`].
-    pub const MIN: Self = Self(I::MIN_UNDERINT);
+    const META_BITS: u32 = (S as u32) + I::SCALE_BITS;
+    const MANTISSA_BITS: u32 = I::BITS - Self::META_BITS;
 
     // layout:
     //   +-+-----+-------------+
     //   |S|scale|  mantissa   |
     //   +-+-----+-------------+
     fn unpack(self) -> (u8, u32, I) {
-        let mantissa = self.0 & I::MAX_MATISSA;
-        let meta = (self.0 >> I::MATISSA_BITS).as_u32();
-        let scale = meta & ((1 << I::SCALE_BITS) - 1);
-        let sign = meta >> I::SCALE_BITS;
-        (sign as u8, scale, mantissa)
+        if S {
+            let mantissa = self.0 & I::SIGNED_MAX_MATISSA;
+            let meta = (self.0 >> Self::MANTISSA_BITS).as_u32();
+            let scale = meta & ((1 << I::SCALE_BITS) - 1);
+            let sign = meta >> I::SCALE_BITS;
+            (sign as u8, scale, mantissa)
+        } else {
+            let mantissa = self.0 & I::UNSIGNED_MAX_MATISSA;
+            let scale = (self.0 >> Self::MANTISSA_BITS).as_u32();
+            (0, scale, mantissa)
+        }
     }
 
     // the caller must make sure that the inputs are valid
     fn pack(sign: u8, scale: u32, mantissa: I) -> Self {
-        debug_assert!(sign <= 1);
-        debug_assert!(scale <= I::MAX_SCALE);
-        debug_assert!(mantissa <= I::MAX_MATISSA);
+        let meta = if S {
+            debug_assert!(sign <= 1);
+            debug_assert!(scale <= I::MAX_SCALE);
+            debug_assert!(Self::valid_mantissa(mantissa));
 
-        let meta = ((sign as u32) << I::SCALE_BITS) | scale;
-        Self(I::from_u32(meta) << I::MATISSA_BITS | mantissa)
+            ((sign as u32) << I::SCALE_BITS) | scale
+        } else {
+            debug_assert!(sign == 0);
+            debug_assert!(scale <= I::MAX_SCALE);
+            debug_assert!(Self::valid_mantissa(mantissa));
+
+            scale
+        };
+
+        Self(I::from_u32(meta) << Self::MANTISSA_BITS | mantissa)
     }
+
+    fn valid_mantissa(man: I) -> bool {
+        man <= (I::MAX >> Self::META_BITS)
+    }
+
+    /// Return the underlying integer.
+    ///
+    /// You should not try to decode this integer yourself.
+    /// You should just hold this and load it later.
+    pub const fn underlying(self) -> I {
+        self.0
+    }
+
+    /// Load from underlying integer, which should only be got from [`Self::underlying`].
+    pub const fn from_underlying(i: I) -> Self {
+        Self(i)
+    }
+}
+
+impl<I: UnderlyingInt> Decimal<I, true> {
+    /// The largest value.
+    pub const MAX: Self = Self(I::SIGNED_MAX_MATISSA);
+
+    /// The smallest value. It's the negative of [`Self::MAX`].
+    pub const MIN: Self = Self(I::SIGNED_MIN_UNDERINT);
 
     /// Deconstruct the decimal into signed mantissa and scale.
     ///
@@ -188,51 +237,82 @@ impl<I: UnderlyingInt> Decimal<I> {
             return None;
         }
         let (man, sign) = I::from_signed(mantissa.into());
-        if man > I::MAX_MATISSA {
+        if man > I::SIGNED_MAX_MATISSA {
             return None;
         }
         Some(Self::pack(sign, scale, man))
     }
+}
 
-    /// Return the underlying integer.
+impl<I: UnderlyingInt> Decimal<I, false> {
+    /// The largest value.
+    pub const MAX: Self = Self(I::UNSIGNED_MAX_MATISSA);
+
+    /// The smallest value. It's zero.
+    pub const MIN: Self = Self::ZERO;
+
+    /// Deconstruct the decimal into signed mantissa and scale.
     ///
-    /// You should not try to decode this integer yourself.
-    /// You should just hold this and load it later.
-    pub const fn underlying(self) -> I {
-        self.0
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::UDec128;
+    /// use core::str::FromStr;
+    ///
+    /// let d = UDec128::from_str("3.14").unwrap();
+    /// assert_eq!(d.parts(), (314, 2));
+    /// ```
+    pub fn parts(self) -> (I, u32) {
+        let (_, scale, man) = self.unpack();
+        (man, scale)
     }
 
-    /// Load from underlying integer, which should only be got from [`Self::underlying`].
+    /// Construct a decimal from signed mantissa and scale.
     ///
     /// # Panic:
     ///
-    /// Panic if invalid. Use [`Self::try_from_underlying`] for checked version.
-    pub fn from_underlying(ui: I) -> Self {
-        Self::try_from_underlying(ui).expect("invalid underlying integer")
-    }
-
-    /// Load from underlying integer, which should only be got from [`Self::underlying`].
-    pub fn try_from_underlying(ui: I) -> Option<Self> {
-        let meta = (ui >> I::MATISSA_BITS).as_u32();
-        let scale = meta & ((1 << I::SCALE_BITS) - 1);
-        if scale > I::MAX_SCALE {
-            None
-        } else {
-            Some(Self(ui))
-        }
-    }
-
-    /// Load from underlying integer, which should only be got from [`Self::underlying`].
+    /// Panic if the mantissa or scale is out of range. Use [`Self::try_from_parts`]
+    /// for the checked version.
     ///
-    /// SAFETY: It's safe if you make sure the integer was got from [`Self::underlying`].
-    pub const unsafe fn unchecked_from_underlying(ui: I) -> Self {
-        Self(ui)
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::UDec128;
+    /// let d = UDec128::from_parts(314, 2);
+    /// assert_eq!(d.to_string(), "3.14");
+    /// ```
+    pub fn from_parts(mantissa: I, scale: u32) -> Self {
+        Self::try_from_parts(mantissa, scale).expect("invalid decimal input parts")
+    }
+
+    /// Construct a decimal from signed mantissa and scale.
+    ///
+    /// Return `None` if the mantissa or scale is out of range.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// use lean_decimal::UDec128;
+    /// let d = UDec128::try_from_parts(314, 2).unwrap();
+    /// assert_eq!(d.to_string(), "3.14");
+    ///
+    /// let d = UDec128::try_from_parts(314, 99); // 99 is out of range
+    /// assert!(d.is_none());
+    /// ```
+    pub fn try_from_parts(mantissa: I, scale: u32) -> Option<Self> {
+        if scale > I::MAX_SCALE {
+            return None;
+        }
+        if mantissa > I::UNSIGNED_MAX_MATISSA {
+            return None;
+        }
+        Some(Self::pack(0, scale, mantissa))
     }
 }
 
 macro_rules! convert_from_int {
     ($decimal_int:ty, $decimal_signed:ty; $($from_int:ty),*) => {$(
-        impl From<$from_int> for Decimal<$decimal_int> {
+        impl From<$from_int> for Decimal<$decimal_int, true> {
             fn from(value: $from_int) -> Self {
                 Self::from_parts(value as $decimal_signed, 0)
             }
@@ -240,6 +320,17 @@ macro_rules! convert_from_int {
     )*};
 }
 convert_from_int!(u128, i128; i8, u8, i16, u16, i32, u32, i64, u64);
+
+macro_rules! convert_unsigned_from_int {
+    ($decimal_int:ty; $($from_int:ty),*) => {$(
+        impl From<$from_int> for Decimal<$decimal_int, false> {
+            fn from(value: $from_int) -> Self {
+                Self::from_parts(value as $decimal_int, 0)
+            }
+        }
+    )*};
+}
+convert_unsigned_from_int!(u128; u8, u16, u32, u64);
 
 pub(crate) fn bits_to_digits(bits: u32) -> u32 {
     bits * 1233 >> 12 // math!

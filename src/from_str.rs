@@ -41,7 +41,7 @@ impl From<ParseIntError> for ParseError {
     }
 }
 
-impl<I> FromStr for Decimal<I>
+impl<I, const S: bool> FromStr for Decimal<I, S>
 where
     I: UnderlyingInt + FromStr<Err = ParseIntError>,
 {
@@ -52,7 +52,13 @@ where
         }
 
         let (s, sign) = match s.chars().next() {
-            Some('-') => (&s[1..], 1),
+            Some('-') => {
+                if !S {
+                    // `-` is invalid for unsigned
+                    return Err(ParseError::Invalid);
+                }
+                (&s[1..], 1)
+            }
             Some('+') => (&s[1..], 0),
             _ => (s, 0),
         };
@@ -67,18 +73,16 @@ where
             let frac_num = I::from_str(frac_str)?;
 
             let int_part = int_num.checked_mul_exp(scale).ok_or(ParseError::Overflow)?;
-            if int_part > I::MAX_MATISSA {
-                return Err(ParseError::Overflow);
-            }
 
             (int_part + frac_num, scale)
         } else {
             (I::from_str(s)?, 0)
         };
 
-        if man > I::MAX_MATISSA {
-            return Err(ParseError::Overflow);
+        if Self::valid_mantissa(man) {
+            Ok(Self::pack(sign, scale, man))
+        } else {
+            Err(ParseError::Overflow)
         }
-        Ok(Self::pack(sign, scale, man))
     }
 }

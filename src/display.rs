@@ -20,7 +20,7 @@ use crate::{Decimal, UnderlyingInt};
 /// assert_eq!(format!("{:x>10}", d), "xxx12.3470"); // set width, fill, alignment
 /// assert_eq!(format!("{:+}", d), "+12.3470"); // set sign
 
-impl<I: UnderlyingInt> fmt::Display for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> fmt::Display for Decimal<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (sign, scale, man) = self.unpack();
 

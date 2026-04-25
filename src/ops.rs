@@ -4,13 +4,7 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 
 use crate::{Decimal, UnderlyingInt, bits_to_digits};
 
-impl<I: UnderlyingInt> Decimal<I> {
-    /// Computes the absolute value of self.
-    #[must_use]
-    pub fn abs(self) -> Self {
-        Self(self.0 << 1 >> 1)
-    }
-
+impl<I: UnderlyingInt, const S: bool> Decimal<I, S> {
     /// Computes the addition.
     ///
     /// Return `None` if overflow.
@@ -64,27 +58,59 @@ impl<I: UnderlyingInt> Decimal<I> {
         let (a_man, b_man, scale) = if a_scale == b_scale {
             (a_man, b_man, a_scale)
         } else {
-            align_scale(a_man, a_scale, b_man, b_scale)
+            Self::align_scale(a_man, a_scale, b_man, b_scale)
         };
 
         // do the addition
-        let (sign, sum) = if a_sign == b_sign {
-            (a_sign, a_man + b_man)
-        } else if a_man > b_man {
-            (a_sign, a_man - b_man)
-        } else {
-            (b_sign, b_man - a_man)
-        };
+        if a_sign == b_sign {
+            let sum = a_man + b_man;
 
-        // pack
-        if sum <= I::MAX_MATISSA {
-            Some(Self::pack(sign, scale, sum))
-        } else if scale > 0 {
-            let man = (sum + (I::TEN >> 1)) / I::TEN; // rounding-divide
-            Some(Self::pack(sign, scale - 1, man))
+            // pack
+            if Self::valid_mantissa(sum) {
+                Some(Self::pack(a_sign, scale, sum))
+            } else if scale > 0 {
+                let man = (sum + (I::TEN >> 1)) / I::TEN; // rounding-divide
+                Some(Self::pack(a_sign, scale - 1, man))
+            } else {
+                None
+            }
+        } else if a_man >= b_man {
+            Some(Self::pack(a_sign, scale, a_man - b_man))
+        } else if S {
+            Some(Self::pack(b_sign, scale, b_man - a_man))
         } else {
+            // substraction for unsigned
             None
         }
+    }
+
+    // Mark this function as #[inline(never)] to avoid interfering with the
+    // main flow of the caller add_or_sub(), thereby enabling better compiler
+    // optimizations.
+    #[inline(never)]
+    fn align_scale(mut a_man: I, a_scale: u32, mut b_man: I, b_scale: u32) -> (I, I, u32) {
+        // big_man/big_scale: the number with bigger scale
+        // small_man/small_scale: the number with smaller scale
+        let (big_man, mut big_scale, small_man, small_scale) = if a_scale > b_scale {
+            (&mut a_man, a_scale, &mut b_man, b_scale)
+        } else {
+            (&mut b_man, b_scale, &mut a_man, a_scale)
+        };
+
+        let small_avail = bits_to_digits(small_man.leading_zeros() - Self::META_BITS);
+        let diff = big_scale - small_scale;
+
+        if diff <= small_avail {
+            // rescale small_man to big_scale
+            *small_man = small_man.mul_exp(diff);
+        } else {
+            // rescale both small_man and big_man
+            *small_man = small_man.mul_exp(small_avail);
+            *big_man = big_man.div_exp(diff - small_avail);
+            big_scale = small_scale + small_avail;
+        }
+
+        (a_man, b_man, big_scale)
     }
 
     /// Computes the multiplication.
@@ -111,7 +137,7 @@ impl<I: UnderlyingInt> Decimal<I> {
         let (a_sign, a_scale, a_man) = self.unpack();
         let (b_sign, b_scale, b_man) = right.into().unpack();
 
-        let (p_man, p_scale) = a_man.mul_with_sum_scale(b_man, a_scale + b_scale)?;
+        let (p_man, p_scale) = a_man.mul_with_sum_scale::<S>(b_man, a_scale + b_scale)?;
 
         Some(Self::pack(a_sign ^ b_sign, p_scale, p_man))
     }
@@ -143,7 +169,7 @@ impl<I: UnderlyingInt> Decimal<I> {
             return None;
         }
 
-        let (q_man, q_scale) = a_man.div_with_scales(b_man, a_scale, b_scale)?;
+        let (q_man, q_scale) = a_man.div_with_scales::<S>(b_man, a_scale, b_scale)?;
 
         Some(Self::pack(a_sign ^ b_sign, q_scale, q_man))
     }
@@ -169,14 +195,21 @@ impl<I: UnderlyingInt> Decimal<I> {
         let new_man = a_man.div_exp(a_scale - dst_scale);
         Self::pack(a_sign, dst_scale, new_man)
     }
-}
 
-impl<I: UnderlyingInt> Decimal<I> {
     /// Return if the number is zero.
     #[must_use]
     pub fn is_zero(self) -> bool {
         let (_, _, man) = self.unpack();
         man == I::ZERO
+    }
+}
+
+// only for signed decimal
+impl<I: UnderlyingInt> Decimal<I, true> {
+    /// Computes the absolute value of self.
+    #[must_use]
+    pub fn abs(self) -> Self {
+        Self(self.0 << 1 >> 1)
     }
 
     /// Return if the number is positive.
@@ -194,9 +227,9 @@ impl<I: UnderlyingInt> Decimal<I> {
     }
 }
 
-impl<I: UnderlyingInt> Eq for Decimal<I> {}
+impl<I: UnderlyingInt, const S: bool> Eq for Decimal<I, S> {}
 
-impl<I: UnderlyingInt> PartialEq for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> PartialEq for Decimal<I, S> {
     fn eq(&self, other: &Self) -> bool {
         let (a_sign, a_scale, a_man) = self.unpack();
         let (b_sign, b_scale, b_man) = other.unpack();
@@ -227,7 +260,7 @@ impl<I: UnderlyingInt> PartialEq for Decimal<I> {
     }
 }
 
-impl<I: UnderlyingInt> Ord for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> Ord for Decimal<I, S> {
     fn cmp(&self, other: &Self) -> Ordering {
         let (a_sign, a_scale, a_man) = self.unpack();
         let (b_sign, b_scale, b_man) = other.unpack();
@@ -268,13 +301,13 @@ impl<I: UnderlyingInt> Ord for Decimal<I> {
     }
 }
 
-impl<I: UnderlyingInt> PartialOrd for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> PartialOrd for Decimal<I, S> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<I: UnderlyingInt> Neg for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> Neg for Decimal<I, S> {
     type Output = Self;
     fn neg(self) -> Self::Output {
         let sign = I::ONE << (I::BITS - 1);
@@ -282,105 +315,78 @@ impl<I: UnderlyingInt> Neg for Decimal<I> {
     }
 }
 
-impl<I: UnderlyingInt> Add for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> Add for Decimal<I, S> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
         self.checked_add(rhs).expect("addition overflow")
     }
 }
 
-impl<I: UnderlyingInt> AddAssign for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> AddAssign for Decimal<I, S> {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs;
     }
 }
 
-impl<I: UnderlyingInt> Sub for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> Sub for Decimal<I, S> {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
         self.checked_sub(rhs).expect("substraction overflow")
     }
 }
 
-impl<I: UnderlyingInt> SubAssign for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> SubAssign for Decimal<I, S> {
     fn sub_assign(&mut self, rhs: Self) {
         *self = *self - rhs;
     }
 }
 
-impl<I: UnderlyingInt, R: Into<Self>> Mul<R> for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool, R: Into<Self>> Mul<R> for Decimal<I, S> {
     type Output = Self;
     fn mul(self, rhs: R) -> Self::Output {
         self.checked_mul(rhs).expect("multiplication overflow")
     }
 }
 
-impl<I: UnderlyingInt, R: Into<Self>> MulAssign<R> for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool, R: Into<Self>> MulAssign<R> for Decimal<I, S> {
     fn mul_assign(&mut self, rhs: R) {
         *self = *self * rhs;
     }
 }
 
-impl<I: UnderlyingInt, R: Into<Self>> Div<R> for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool, R: Into<Self>> Div<R> for Decimal<I, S> {
     type Output = Self;
     fn div(self, rhs: R) -> Self::Output {
         self.checked_div(rhs).expect("division overflow or by zero")
     }
 }
 
-impl<I: UnderlyingInt, R: Into<Self>> DivAssign<R> for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool, R: Into<Self>> DivAssign<R> for Decimal<I, S> {
     fn div_assign(&mut self, rhs: R) {
         *self = *self / rhs;
     }
 }
 
-impl<I: UnderlyingInt> core::iter::Sum for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> core::iter::Sum for Decimal<I, S> {
     fn sum<Iter: Iterator<Item = Self>>(iter: Iter) -> Self {
         iter.fold(Self::ZERO, |acc, d| acc + d)
     }
 }
 
-impl<'a, I: UnderlyingInt> core::iter::Sum<&'a Self> for Decimal<I> {
+impl<'a, I: UnderlyingInt, const S: bool> core::iter::Sum<&'a Self> for Decimal<I, S> {
     fn sum<Iter: Iterator<Item = &'a Self>>(iter: Iter) -> Self {
         iter.fold(Self::ZERO, |acc, d| acc + *d)
     }
 }
 
-impl<I: UnderlyingInt> fmt::Debug for Decimal<I> {
+impl<I: UnderlyingInt, const S: bool> fmt::Debug for Decimal<I, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (iman, scale) = self.parts();
-        write!(f, "Decimal[{iman} {scale}]")
+        let (sign, scale, man) = self.unpack();
+        if S {
+            let iman = I::to_signed(man, sign);
+            write!(f, "Decimal[{iman} {scale}]")
+        } else {
+            write!(f, "Decimal[{man} {scale}]")
+        }
     }
-}
-
-// Mark this function as #[inline(never)] to avoid interfering with the
-// main flow of the caller add_or_sub(), thereby enabling better compiler
-// optimizations.
-#[inline(never)]
-fn align_scale<I>(mut a_man: I, a_scale: u32, mut b_man: I, b_scale: u32) -> (I, I, u32)
-where
-    I: UnderlyingInt,
-{
-    // big_man/big_scale: the number with bigger scale
-    // small_man/small_scale: the number with smaller scale
-    let (big_man, mut big_scale, small_man, small_scale) = if a_scale > b_scale {
-        (&mut a_man, a_scale, &mut b_man, b_scale)
-    } else {
-        (&mut b_man, b_scale, &mut a_man, a_scale)
-    };
-
-    let small_avail = bits_to_digits(small_man.leading_zeros() - I::META_BITS);
-    let diff = big_scale - small_scale;
-
-    if diff <= small_avail {
-        // rescale small_man to big_scale
-        *small_man = small_man.mul_exp(diff);
-    } else {
-        // rescale both small_man and big_man
-        *small_man = small_man.mul_exp(small_avail);
-        *big_man = big_man.div_exp(diff - small_avail);
-        big_scale = small_scale + small_avail;
-    }
-
-    (a_man, b_man, big_scale)
 }

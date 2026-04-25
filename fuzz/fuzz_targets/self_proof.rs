@@ -3,9 +3,7 @@
 use libfuzzer_sys::fuzz_target;
 use std::str::FromStr;
 
-use lean_decimal::{Decimal, ParseError};
-
-type Dec128 = Decimal<u128>;
+use lean_decimal::{Dec128, ParseError};
 
 #[derive(Debug, arbitrary::Arbitrary)]
 struct Data {
@@ -45,8 +43,8 @@ fn check_div_q(n: Dec128, d: Dec128, q: Dec128) {
     // If the @n is very big, and the @q is rounded up, then
     // the product may be overflow.
     let Some(p) = d.checked_mul(q) else {
-        let (n_man, _) = n.parts();
-        assert!(n_man.abs() >= (1_i128 << 122) - 10);
+        // dbg!(n, d, q);
+        assert!(Dec128::MAX - n.abs() < 100_000.into()); // 10^(36-31)
         return;
     };
 
