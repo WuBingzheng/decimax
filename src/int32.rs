@@ -201,15 +201,16 @@ fn mul_with_sum_scale_full<const S: bool>(a: u32, b: u32, sum_scale: u32) -> Opt
     }
 
     // prepare for rounding
-    let q = ((p + get_exp(clear_digits) as u64 / 2) / b as u64) as u32;
+    let exp = get_exp(clear_digits) as u64;
+    let q = (p + exp / 2) / exp;
 
     // handle the edge case above
-    if q > max_mantissa::<S>() {
+    if q > max_mantissa::<S>() as u64 {
         debug_assert_eq!(clear_digits, sum_scale);
         return None;
     }
 
-    Some((q, sum_scale - clear_digits))
+    Some((q as u32, sum_scale - clear_digits))
 }
 
 fn div_with_scales_full<const S: bool>(n: u32, d: u32, max_scale: u32) -> (u32, u32, u32) {
