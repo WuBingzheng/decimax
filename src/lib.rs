@@ -1,6 +1,7 @@
 #![no_std]
 #![doc = include_str!("../README.md")]
 
+mod convert;
 mod display;
 mod from_str;
 mod ops;
@@ -124,6 +125,9 @@ pub trait UnderlyingInt:
 impl<I: UnderlyingInt, const S: bool> Decimal<I, S> {
     /// Zero.
     pub const ZERO: Self = Self(I::ZERO);
+
+    /// One.
+    pub const ONE: Self = Self(I::ONE);
 
     const META_BITS: u32 = (S as u32) + I::SCALE_BITS;
     const MANTISSA_BITS: u32 = I::BITS - Self::META_BITS;
@@ -321,32 +325,6 @@ impl<I: UnderlyingInt> Decimal<I, false> {
         Some(Self::pack(0, scale, mantissa))
     }
 }
-
-macro_rules! convert_signed_from_int {
-    ($decimal_int:ty, $decimal_signed:ty; $($from_int:ty),*) => {$(
-        impl From<$from_int> for Decimal<$decimal_int, true> {
-            fn from(value: $from_int) -> Self {
-                Self::from_parts(value as $decimal_signed, 0)
-            }
-        }
-    )*};
-}
-convert_signed_from_int!(u128, i128; i8, u8, i16, u16, i32, u32, i64, u64);
-convert_signed_from_int!(u64, i64; i8, u8, i16, u16, i32, u32);
-convert_signed_from_int!(u32, i32; i8, u8, i16, u16);
-
-macro_rules! convert_unsigned_from_int {
-    ($decimal_int:ty; $($from_int:ty),*) => {$(
-        impl From<$from_int> for Decimal<$decimal_int, false> {
-            fn from(value: $from_int) -> Self {
-                Self::from_parts(value as $decimal_int, 0)
-            }
-        }
-    )*};
-}
-convert_unsigned_from_int!(u128; u8, u16, u32, u64);
-convert_unsigned_from_int!(u64; u8, u16, u32);
-convert_unsigned_from_int!(u32; u8, u16);
 
 pub(crate) fn bits_to_digits(bits: u32) -> u32 {
     bits * 1233 >> 12 // math!
