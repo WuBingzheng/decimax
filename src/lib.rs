@@ -6,19 +6,31 @@ mod from_str;
 mod ops;
 
 mod int128;
-// mod int64;
-// mod int32;
+mod int32;
+mod int64;
 
 use core::fmt::{Debug, Display};
 use core::ops::{Add, AddAssign, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, Sub, SubAssign};
 
 pub use from_str::ParseError;
 
-/// The 128-bit signed decimal type, with about 36 significant digits in base-10 and scale in [0, 31].
+/// The 128-bit decimal type, with about 36 significant digits and at most 31 fraction digits.
 pub type Dec128 = Decimal<u128, true>;
 
-/// The 128-bit unsigned decimal type, with about 36 significant digits in base-10 and scale in [0, 31].
+/// The 128-bit unsigned decimal type, with about 36 significant digits and at most 31 fraction digits.
 pub type UDec128 = Decimal<u128, false>;
+
+/// The 64-bit decimal type, with about 18 significant digits and at most 15 fraction digits.
+pub type Dec64 = Decimal<u64, true>;
+
+/// The 64-bit unsigned decimal type, with about 18 significant digits and at most 15 fraction digits.
+pub type UDec64 = Decimal<u64, false>;
+
+/// The 32-bit decimal type, with about 9 significant digits and at most 7 fraction digits.
+pub type Dec32 = Decimal<u32, true>;
+
+/// The 32-bit unsigned decimal type, with about 9 significant digits and at most 7 fraction digits.
+pub type UDec32 = Decimal<u32, false>;
 
 /// The decimal type.
 ///
@@ -310,7 +322,7 @@ impl<I: UnderlyingInt> Decimal<I, false> {
     }
 }
 
-macro_rules! convert_from_int {
+macro_rules! convert_signed_from_int {
     ($decimal_int:ty, $decimal_signed:ty; $($from_int:ty),*) => {$(
         impl From<$from_int> for Decimal<$decimal_int, true> {
             fn from(value: $from_int) -> Self {
@@ -319,7 +331,9 @@ macro_rules! convert_from_int {
         }
     )*};
 }
-convert_from_int!(u128, i128; i8, u8, i16, u16, i32, u32, i64, u64);
+convert_signed_from_int!(u128, i128; i8, u8, i16, u16, i32, u32, i64, u64);
+convert_signed_from_int!(u64, i64; i8, u8, i16, u16, i32, u32);
+convert_signed_from_int!(u32, i32; i8, u8, i16, u16);
 
 macro_rules! convert_unsigned_from_int {
     ($decimal_int:ty; $($from_int:ty),*) => {$(
@@ -331,6 +345,8 @@ macro_rules! convert_unsigned_from_int {
     )*};
 }
 convert_unsigned_from_int!(u128; u8, u16, u32, u64);
+convert_unsigned_from_int!(u64; u8, u16, u32);
+convert_unsigned_from_int!(u32; u8, u16);
 
 pub(crate) fn bits_to_digits(bits: u32) -> u32 {
     bits * 1233 >> 12 // math!

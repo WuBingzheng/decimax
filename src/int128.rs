@@ -134,7 +134,7 @@ fn meta_bits<const S: bool>() -> u32 {
 
 // the caller must make sure that: @i < 39
 fn get_exp(i: u32) -> u128 {
-    // Although in most cases, 36 (which is MAX_SCALE) is enough,
+    // Although in most cases, 31 (which is MAX_SCALE) is enough,
     // but in some cases we need more.
     debug_assert!(i < 39);
 

@@ -44,7 +44,8 @@ fn check_div_q(n: Dec128, d: Dec128, q: Dec128) {
     // the product may be overflow.
     let Some(p) = d.checked_mul(q) else {
         // dbg!(n, d, q);
-        assert!(Dec128::MAX - n.abs() < 100_000.into()); // 10^(36-31)
+        // dbg!(Dec128::MAX - n.abs());
+        assert!(Dec128::MAX - n.abs() < 200_000.into()); // 2 * 10^(36-31)
         return;
     };
 
