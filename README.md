@@ -101,7 +101,7 @@ are objective. Please check it out and run it yourself.
 
 ```rust
 // We take the 128-bit type as example.
-use lean_decimal::Dec128;
+use lean_decimal::{Dec128, UDec64};
 use core::str::FromStr;
 
 // Construct from integer and string, while the float is in process.
@@ -117,6 +117,8 @@ assert_eq!(a + b, Dec128::from_parts(246456, 3)); // 123 + 123.456 = 246.456
 
 // Multiplication and division can operate with short integers and decimals too.
 assert_eq!(b * 2, Dec128::from_parts(246912, 3)); // 123.456 * 2 = 246.912
+let rate = UDec64::from_parts(2, 0); // new type
+assert_eq!(b * rate, Dec128::from_parts(246912, 3)); // 123.456 * 2 = 246.912
 ```
 
 
@@ -128,6 +130,4 @@ though all of them have been fully tested.
 TODO list:
 
 - Work with `f32` and `f64`,
-- 64-bit and 32-bit types,
-- Unsigned types,
 - Some serializing features.

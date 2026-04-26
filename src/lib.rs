@@ -19,18 +19,33 @@ pub use from_str::ParseError;
 pub type Dec128 = Decimal<u128, true>;
 
 /// The 128-bit unsigned decimal type, with about 36 significant digits and at most 31 fraction digits.
+///
+/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
+/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type UDec128 = Decimal<u128, false>;
 
 /// The 64-bit decimal type, with about 18 significant digits and at most 15 fraction digits.
+///
+/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
+/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type Dec64 = Decimal<u64, true>;
 
 /// The 64-bit unsigned decimal type, with about 18 significant digits and at most 15 fraction digits.
+///
+/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
+/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type UDec64 = Decimal<u64, false>;
 
 /// The 32-bit decimal type, with about 9 significant digits and at most 7 fraction digits.
+///
+/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
+/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type Dec32 = Decimal<u32, true>;
 
 /// The 32-bit unsigned decimal type, with about 9 significant digits and at most 7 fraction digits.
+///
+/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
+/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type UDec32 = Decimal<u32, false>;
 
 /// The decimal type.
@@ -40,8 +55,8 @@ pub type UDec32 = Decimal<u32, false>;
 ///
 /// The `S` is for signed or unsigned.
 ///
-/// They have aliases [`Dec128`], `Dec64`, `Dec32`, [`UDec128`], `UDec64`
-/// and `UDec32` respectively.
+/// They have aliases [`Dec128`], [`Dec64`], [`Dec32`], [`UDec128`], [`UDec64`]
+/// and [`UDec32`] respectively.
 #[derive(Copy, Clone, Default)]
 #[repr(transparent)]
 pub struct Decimal<I: UnderlyingInt, const S: bool>(I);
@@ -261,13 +276,13 @@ impl<I: UnderlyingInt> Decimal<I, true> {
 }
 
 impl<I: UnderlyingInt> Decimal<I, false> {
-    /// The largest value.
+    /// The largest value of unsigned decimal.
     pub const MAX: Self = Self(I::UNSIGNED_MAX_MATISSA);
 
-    /// The smallest value. It's zero.
+    /// The smallest value of unsigned decimal. It's zero.
     pub const MIN: Self = Self::ZERO;
 
-    /// Deconstruct the decimal into signed mantissa and scale.
+    /// Deconstruct the unsigned decimal into mantissa and scale.
     ///
     /// # Examples:
     ///
@@ -283,7 +298,7 @@ impl<I: UnderlyingInt> Decimal<I, false> {
         (man, scale)
     }
 
-    /// Construct a decimal from signed mantissa and scale.
+    /// Construct a unsigned decimal from mantissa and scale.
     ///
     /// # Panic:
     ///
@@ -301,7 +316,7 @@ impl<I: UnderlyingInt> Decimal<I, false> {
         Self::try_from_parts(mantissa, scale).expect("invalid decimal input parts")
     }
 
-    /// Construct a decimal from signed mantissa and scale.
+    /// Construct a unsigned decimal from signed mantissa and scale.
     ///
     /// Return `None` if the mantissa or scale is out of range.
     ///
