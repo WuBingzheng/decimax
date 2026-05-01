@@ -27,7 +27,7 @@ integer are used. No waste. For example the 128-bit signed decimal type
 `rust_decimal` has 96 bits for mantissa (about 28 digits) and at most
 28 fraction digits.
 
-- More types. [6 types](#types) by now. Long and short (128/64/32-bit),
+- More types. We have [6 types](#types) by now. Long and short (128/64/32-bit),
 signed and unsigned.
 
 
@@ -46,9 +46,8 @@ as example:
 +-+-----+-------------------------------+
 ```
 
-The sign(`S`), scale, and mantissa occupy 1, 6, and 121 bits respectively.
-Before each operation, they are unpacked via bitwise operations, and the
-mantissa is still computed as one single `u128` value.
+The sign(`S`), scale, and mantissa occupy 1, 5, and 122 bits respectively.
+The mantissa is computed as one single `u128` integer for each operation.
 
 In contrast, the definition in `rust_decimal` is as follows:
 
@@ -108,14 +107,3 @@ let p = Dec128::from_parts(246912, 3); // 123.456 * 2 = 246.912
 assert_eq!(b * 2, p); // by integer
 assert_eq!(b * UDec32::from_parts(2, 0), p); // by new unsigned decimal type
 ```
-
-
-# Status
-
-Only basic arithmetic operations and conversion are available right now,
-though all of them have been fully tested.
-
-TODO list:
-
-- Work with `f32` and `f64`,
-- Some serializing features.
