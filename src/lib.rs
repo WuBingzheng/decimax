@@ -50,8 +50,7 @@ pub type UDec32 = Decimal<u32, false>;
 
 /// The decimal type.
 ///
-/// The `I` is the underlying integer type. It supports `u128` only by now,
-/// and will support `u64` and `u32` in next version.
+/// The `I` is the underlying integer type, which could be `u128`, `u64` or `u32`.
 ///
 /// The `S` is for signed or unsigned.
 ///

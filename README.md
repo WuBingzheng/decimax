@@ -1,24 +1,10 @@
 Fast decimal types.
 
-It represents decimal fractions accurately by scaling integers in base-10.
+This crate represents decimals accurately by scaling integer in base-10.
 So there is no round-off error like 0.1 + 0.2 != 0.3.
 
-It is fixed-precision (the word "precision" here means significant digits).
-It uses a single integer (`u128`, `u64`, or `u32`) as the underlying
-representation, without involving heap memory allocation. This is fast and
-`Copy`. However, arithmetic operations may lead to precision loss or
-overflow. If this is undesirable, consider choosing an arbitrary-precision
-decimal crate like `bigdecimal`.
-
-It is floating-point. Each instance has its own scale, which changes during
-arithmetic operations. It can represent a wider range, and is convenient to
-use because users don’t need to concern for scale. However, the implicit
-rescaling introduces performance overhead and
-[round-off errors](https://en.wikipedia.org/wiki/Floating-point_arithmetic#Addition_and_subtraction).
-If this is undesirable, consider choosing an fixed-point decimal
-crate like `primitive_fixed_point_decimal`.
-
-This crate is similar in kind to [`rust_decimal`](https://docs.rs/rust_decimal),
+There are kinds of ways to represent decimals, each with its own focus.
+This crate is same kind to [`rust_decimal`](https://docs.rs/rust_decimal),
 but *better*.
 
 
@@ -34,13 +20,15 @@ for details.
 
 ![Benchmark result](https://raw.githubusercontent.com/WuBingzheng/lean-decimal/refs/tags/v0.1.0/benches/charts/mul-amd.svg)
 
-- More significant digits and scale. The 128-bit decimal type in this crate
-has 121 bits for mantissa (about 36 decimal digits in base-10), while `rust_decimal`
-has only 96 bits (about 28 decimal digits). Accordingly, our scale range is
-[0, 36], compared to their [0, 28].
+- More significant digits and fraction digits. All bits of the underlying
+integer are used. No waste. For example the 128-bit signed decimal type
+[`Dec128`] has 122 bits for mantissa (about 36 decimal significant digits),
+5 bits for scale (at most 31 fraction digits), and 1 bit for sign. While
+`rust_decimal` has 96 bits for mantissa (about 28 digits) and at most
+28 fraction digits.
 
-- More types. This crate provides 3 types: 128-bit, 64-bit, and 32-bit. The
-last two are in process, and will be available in next version.
+- More types. [6 types](#types) by now. Long and short (128/64/32-bit),
+signed and unsigned.
 
 
 # How is it made faster?
@@ -101,7 +89,7 @@ are objective. Please check it out and run it yourself.
 
 ```rust
 // We take the 128-bit type as example.
-use lean_decimal::{Dec128, UDec64};
+use lean_decimal::{Dec128, UDec32};
 use core::str::FromStr;
 
 // Construct from integer and string, while the float is in process.
@@ -116,9 +104,9 @@ assert_eq!(b, b2);
 assert_eq!(a + b, Dec128::from_parts(246456, 3)); // 123 + 123.456 = 246.456
 
 // Multiplication and division can operate with short integers and decimals too.
-assert_eq!(b * 2, Dec128::from_parts(246912, 3)); // 123.456 * 2 = 246.912
-let rate = UDec64::from_parts(2, 0); // new type
-assert_eq!(b * rate, Dec128::from_parts(246912, 3)); // 123.456 * 2 = 246.912
+let p = Dec128::from_parts(246912, 3); // 123.456 * 2 = 246.912
+assert_eq!(b * 2, p); // by integer
+assert_eq!(b * UDec32::from_parts(2, 0), p); // by new unsigned decimal type
 ```
 
 

@@ -10,7 +10,7 @@ impl<I: UnderlyingInt, const S: bool> Decimal<I, S> {
     /// Return `None` if overflow.
     ///
     /// There may loss precision if the scales of the 2 operands differ too greatly.
-    /// It's a classic [round-off errors](https://en.wikipedia.org/wiki/Floating-point_arithmetic#Addition_and_subtraction).
+    /// It's a classic [round-off errors](https://en.wikipedia.org/wiki/Floating-point_arithmetic#Addition_and_subtraction)
     /// of floating-point calculation.
     ///
     /// # Examples:
@@ -33,7 +33,7 @@ impl<I: UnderlyingInt, const S: bool> Decimal<I, S> {
     /// Return `None` if overflow.
     ///
     /// There may loss precision if the scales of the 2 operands differ too greatly.
-    /// It's a classic [round-off errors](https://en.wikipedia.org/wiki/Floating-point_arithmetic#Addition_and_subtraction).
+    /// It's a classic [round-off errors](https://en.wikipedia.org/wiki/Floating-point_arithmetic#Addition_and_subtraction)
     /// of floating-point calculation.
     ///
     /// # Examples:
@@ -122,11 +122,15 @@ impl<I: UnderlyingInt, const S: bool> Decimal<I, S> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use lean_decimal::{Dec128, UDec32};
     /// let a = Dec128::from_parts(123, 2); // 1.23
     /// let b = Dec128::from_parts(1, 4);   // 0.0001
     /// let prod = Dec128::from_parts(123, 6); // 0.000123
     /// assert_eq!(a.checked_mul(b).unwrap(), prod);
+    ///
+    /// // by short unsigned decimal: UDec32
+    /// let c = UDec32::from_parts(1, 4); // 0.0001
+    /// assert_eq!(a.checked_mul(c).unwrap(), prod);
     ///
     /// // by integer
     /// let prod = Dec128::from_parts(246, 2); // 2.46
@@ -151,11 +155,15 @@ impl<I: UnderlyingInt, const S: bool> Decimal<I, S> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use lean_decimal::{Dec128, UDec32};
     /// let a = Dec128::from_parts(123, 2); // 1.23
     /// let b = Dec128::from_parts(1, 4);   // 0.0001
     /// let q = Dec128::from_parts(12300, 0); // 12300
     /// assert_eq!(a.checked_div(b).unwrap(), q);
+    ///
+    /// // by short unsigned decimal: UDec32
+    /// let c = UDec32::from_parts(1, 4); // 0.0001
+    /// assert_eq!(a.checked_mul(c).unwrap(), q);
     ///
     /// // by integer
     /// let q = Dec128::from_parts(615, 3); // 0.615
