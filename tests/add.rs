@@ -1,4 +1,4 @@
-use lean_decimal::{Dec32, Dec64, Dec128, Decimal, UnderlyingInt};
+use decimax::{Dec32, Dec64, Dec128, Decimal, UnderlyingInt};
 
 fn test_add<I: UnderlyingInt>(a: Decimal<I, true>, b: Decimal<I, true>, r: Decimal<I, true>) {
     dbg!(a, b, r);

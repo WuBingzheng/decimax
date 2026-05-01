@@ -17,15 +17,15 @@ fn rust_div(a: RustDec, b: RustDec) -> RustDec {
     black_box(a / b)
 }
 
-// lean_decimal
-type LeanDec = lean_decimal::Dec128;
-fn lean_add(a: LeanDec, b: LeanDec) -> LeanDec {
+// decimax
+type MaxDec = decimax::Dec128;
+fn decimax_add(a: MaxDec, b: MaxDec) -> MaxDec {
     black_box(a + b)
 }
-fn lean_mul(a: LeanDec, b: LeanDec) -> LeanDec {
+fn decimax_mul(a: MaxDec, b: MaxDec) -> MaxDec {
     black_box(a * b)
 }
-fn lean_div(a: LeanDec, b: LeanDec) -> LeanDec {
+fn decimax_div(a: MaxDec, b: MaxDec) -> MaxDec {
     black_box(a / b)
 }
 
@@ -38,19 +38,19 @@ fn do_bench_add(group: &mut BenchmarkGroup<'_, WallTime>, name: &str, scale: u32
         let b = RustDec::from_i128_with_scale(man, scale);
 
         group.bench_with_input(
-            BenchmarkId::new(format!("{name}:rust-dec"), iexp),
+            BenchmarkId::new(format!("{name}:rust_decimal"), iexp),
             &(a, b),
             |b, i| b.iter(|| rust_add(i.0, i.1)),
         );
     }
 
-    // lean-decimal
-    let a = LeanDec::from_parts(man, 0);
-    let b = LeanDec::from_parts(man, scale);
+    // decimax
+    let a = MaxDec::from_parts(man, 0);
+    let b = MaxDec::from_parts(man, scale);
     group.bench_with_input(
-        BenchmarkId::new(format!("{name}:lean-dec"), iexp),
+        BenchmarkId::new(format!("{name}:decimax"), iexp),
         &(a, b),
-        |b, i| b.iter(|| lean_add(i.0, i.1)),
+        |b, i| b.iter(|| decimax_add(i.0, i.1)),
     );
 }
 
@@ -74,14 +74,14 @@ fn bench_mul(c: &mut Criterion, machine: &str, sample: usize) {
 
         if i <= 28 {
             let a = RustDec::from_i128_with_scale(man, i);
-            group.bench_with_input(BenchmarkId::new("rust-dec", i), &(a, a), |b, i| {
+            group.bench_with_input(BenchmarkId::new("rust_decimal", i), &(a, a), |b, i| {
                 b.iter(|| rust_mul(i.0, i.1))
             });
         }
 
-        let a = LeanDec::from_parts(man, i);
-        group.bench_with_input(BenchmarkId::new("lean-dec", i), &(a, a), |b, i| {
-            b.iter(|| lean_mul(i.0, i.1))
+        let a = MaxDec::from_parts(man, i);
+        group.bench_with_input(BenchmarkId::new("decimax", i), &(a, a), |b, i| {
+            b.iter(|| decimax_mul(i.0, i.1))
         });
     }
 
@@ -101,19 +101,19 @@ fn do_bench_div(group: &mut BenchmarkGroup<'_, WallTime>, n_exp: u32, d_exp: u32
         let n = RustDec::from_i128_with_scale(n_man, 10);
         let d = RustDec::from_i128_with_scale(d_man + extra, 10);
         group.bench_with_input(
-            BenchmarkId::new(format!("{name}:rust-dec"), n_exp),
+            BenchmarkId::new(format!("{name}:rust_decimal"), n_exp),
             &(n, d),
             |b, i| b.iter(|| rust_div(i.0, i.1)),
         );
     }
 
-    // lean-decimal
-    let n = LeanDec::from_parts(n_man, 10);
-    let d = LeanDec::from_parts(d_man + extra, 10);
+    // decimax
+    let n = MaxDec::from_parts(n_man, 10);
+    let d = MaxDec::from_parts(d_man + extra, 10);
     group.bench_with_input(
-        BenchmarkId::new(format!("{name}:lean-dec"), n_exp),
+        BenchmarkId::new(format!("{name}:decimax"), n_exp),
         &(n, d),
-        |b, i| b.iter(|| lean_div(i.0, i.1)),
+        |b, i| b.iter(|| decimax_div(i.0, i.1)),
     );
 }
 

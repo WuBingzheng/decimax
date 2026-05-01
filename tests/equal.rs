@@ -1,4 +1,4 @@
-use lean_decimal::Dec128;
+use decimax::Dec128;
 
 #[test]
 fn equal_base() {

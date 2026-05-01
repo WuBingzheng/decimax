@@ -1,5 +1,5 @@
-use lean_decimal::{Dec32, Dec64, Dec128};
-use lean_decimal::{Decimal, UnderlyingInt};
+use decimax::{Dec32, Dec64, Dec128};
+use decimax::{Decimal, UnderlyingInt};
 
 fn check_div<I>(n_man: I::Signed, d_man: I::Signed, r_man: I::Signed, diff_scale: u32)
 where

@@ -1,5 +1,5 @@
 [package]
-name = "lean-decimal-fuzz"
+name = "decimax-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
@@ -12,7 +12,7 @@ arbitrary = { features = ["derive"], version = "1.0" }
 libfuzzer-sys = "0.4"
 primitive_fixed_point_decimal = "1.4.2"
 
-[dependencies.lean-decimal]
+[dependencies.decimax]
 path = ".."
 
 [[bin]]

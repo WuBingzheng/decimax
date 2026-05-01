@@ -11,7 +11,7 @@ use crate::{Decimal, UnderlyingInt};
 /// Examples:
 ///
 /// ```
-/// use lean_decimal::Dec128;
+/// use decimax::Dec128;
 /// let d = Dec128::from_parts(12_3470, 4);
 ///
 /// assert_eq!(format!("{}", d), "12.3470");

@@ -1,4 +1,4 @@
-use lean_decimal::{Dec32, Dec64, Dec128};
+use decimax::{Dec32, Dec64, Dec128};
 
 #[test]
 fn mul128() {

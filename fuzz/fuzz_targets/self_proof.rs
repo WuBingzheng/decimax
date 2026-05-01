@@ -4,7 +4,7 @@ use libfuzzer_sys::fuzz_target;
 use std::num::ParseIntError;
 use std::str::FromStr;
 
-use lean_decimal::{Decimal, ParseError, UnderlyingInt};
+use decimax::{Decimal, ParseError, UnderlyingInt};
 
 #[derive(Debug, arbitrary::Arbitrary)]
 struct Data {

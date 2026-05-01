@@ -3,7 +3,7 @@
 use libfuzzer_sys::fuzz_target;
 use primitive_fixed_point_decimal::{FpdecInner, OobScaleFpdec};
 
-use lean_decimal::{Decimal, UnderlyingInt};
+use decimax::{Decimal, UnderlyingInt};
 
 #[derive(Debug, arbitrary::Arbitrary)]
 struct Data {
