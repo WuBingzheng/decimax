@@ -134,7 +134,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use decimax::Dec128;
     /// use core::str::FromStr;
     ///
     /// let d = Dec128::from_str("3.14").unwrap();
@@ -155,7 +155,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use decimax::Dec128;
     /// let d = Dec128::from_parts(314, 2);
     /// assert_eq!(d.to_string(), "3.14");
     /// ```
@@ -173,7 +173,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use decimax::Dec128;
     /// let d = Dec128::try_from_parts(314, 2).unwrap();
     /// assert_eq!(d.to_string(), "3.14");
     ///

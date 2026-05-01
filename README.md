@@ -101,7 +101,7 @@ are objective. Please check it out and run it yourself.
 
 ```rust
 // We take the 128-bit type as example.
-use lean_decimal::Dec128;
+use decimax::Dec128;
 use core::str::FromStr;
 
 // Construct from integer and string, while the float is in process.

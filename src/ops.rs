@@ -22,7 +22,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use decimax::Dec128;
     /// let a = Dec128::from_parts(123, 2); // 1.23
     /// let b = Dec128::from_parts(1, 4);   // 0.0001
     /// let sum = Dec128::from_parts(12301, 4); // 1.2301
@@ -45,7 +45,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use decimax::Dec128;
     /// let a = Dec128::from_parts(123, 2); // 1.23
     /// let b = Dec128::from_parts(1, 4);   // 0.0001
     /// let diff = Dec128::from_parts(12299, 4); // 1.2299
@@ -96,7 +96,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use decimax::Dec128;
     /// let a = Dec128::from_parts(123, 2); // 1.23
     /// let b = Dec128::from_parts(1, 4);   // 0.0001
     /// let prod = Dec128::from_parts(123, 6); // 0.000123
@@ -125,7 +125,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use decimax::Dec128;
     /// let a = Dec128::from_parts(123, 2); // 1.23
     /// let b = Dec128::from_parts(1, 4);   // 0.0001
     /// let q = Dec128::from_parts(12300, 0); // 12300
@@ -155,7 +155,7 @@ impl<I: UnderlyingInt> Decimal<I> {
     /// # Examples:
     ///
     /// ```
-    /// use lean_decimal::Dec128;
+    /// use decimax::Dec128;
     /// let a = Dec128::from_parts(12345678, 6); // 12.345678
     /// let b = Dec128::from_parts(1235, 2);   // 12.35
     /// assert_eq!(a.round_to(2), b);

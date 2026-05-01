@@ -1,4 +1,4 @@
-use lean_decimal::Decimal;
+use decimax::Decimal;
 
 type Dec = Decimal<u128>;
 
