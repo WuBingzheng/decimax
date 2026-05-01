@@ -1,3 +1,5 @@
+**This crate has been renamed to** [`decimax`](https://crates.io/crates/decimax).
+
 Fast, fixed-precision, floating-point decimal types.
 
 It represents decimal fractions accurately by scaling integers in base-10.

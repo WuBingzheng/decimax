@@ -1,3 +1,7 @@
+# v0.1.2 (2026-05-01)
+
+- Rename to `decimax`.
+
 # v0.1.1 (2026-04-19)
 
 - Fix typo in README.

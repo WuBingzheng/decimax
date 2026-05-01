@@ -1,6 +1,6 @@
 [package]
 name = "lean-decimal"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Wu Bingzheng <wubingzheng@gmail.com>"]
 description = "Fast, fixed-precision, floating-point decimal types."
