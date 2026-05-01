@@ -367,6 +367,7 @@ fn div_with_scales_by32<const S: bool>(n: u128, d: u32, max_scale: u32) -> (u128
     (q.mul_exp(act_scale) + q2, r2, act_scale)
 }
 
+#[inline(never)]
 fn div_with_scales_full<const S: bool>(n: u128, d: u128, max_scale: u32) -> (u128, u128, u32) {
     let (mut q, mut r) = div_rem(n, d);
 

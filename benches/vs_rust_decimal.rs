@@ -18,7 +18,7 @@ fn rust_div(a: RustDec, b: RustDec) -> RustDec {
 }
 
 // lean_decimal
-type LeanDec = lean_decimal::Decimal<u128>;
+type LeanDec = lean_decimal::Dec128;
 fn lean_add(a: LeanDec, b: LeanDec) -> LeanDec {
     black_box(a + b)
 }
@@ -57,7 +57,7 @@ fn do_bench_add(group: &mut BenchmarkGroup<'_, WallTime>, name: &str, scale: u32
 fn bench_add(c: &mut Criterion, machine: &str, sample: usize) {
     let mut group = c.benchmark_group(format!("addition{machine}"));
 
-    for iexp in (0..=36).step_by(sample) {
+    for iexp in (0..=31).step_by(sample) {
         do_bench_add(&mut group, "pure", 0, iexp);
         do_bench_add(&mut group, "rescale", 15, iexp);
     }
@@ -69,7 +69,7 @@ fn bench_add(c: &mut Criterion, machine: &str, sample: usize) {
 fn bench_mul(c: &mut Criterion, machine: &str, sample: usize) {
     let mut group = c.benchmark_group(format!("multiplication{machine}"));
 
-    for i in (0..=36).step_by(sample) {
+    for i in (0..=31).step_by(sample) {
         let man = 10_i128.pow(i) + 13;
 
         if i <= 28 {
@@ -119,7 +119,7 @@ fn do_bench_div(group: &mut BenchmarkGroup<'_, WallTime>, n_exp: u32, d_exp: u32
 
 fn bench_div_by_small(c: &mut Criterion, machine: &str, sample: usize) {
     let mut group = c.benchmark_group(format!("division-by-small{machine}"));
-    for i in (0..=36).step_by(sample) {
+    for i in (0..=31).step_by(sample) {
         do_bench_div(&mut group, i, 8, true);
         do_bench_div(&mut group, i, 8, false);
     }
@@ -128,7 +128,7 @@ fn bench_div_by_small(c: &mut Criterion, machine: &str, sample: usize) {
 
 fn bench_div_by_big(c: &mut Criterion, machine: &str, sample: usize) {
     let mut group = c.benchmark_group(format!("division-by-big{machine}"));
-    for i in (0..=36).step_by(sample) {
+    for i in (0..=31).step_by(sample) {
         do_bench_div(&mut group, i, 18, true);
         do_bench_div(&mut group, i, 18, false);
     }
