@@ -1,4 +1,4 @@
-Fast decimal types.
+Fast, fixed-size, floating-point decimal types.
 
 This crate represents decimals accurately by scaling integer in base-10.
 So there is no round-off error like 0.1 + 0.2 != 0.3.
@@ -27,7 +27,7 @@ integer are used. No waste. For example the 128-bit signed decimal type
 `rust_decimal` has 96 bits for mantissa (about 28 digits) and at most
 28 fraction digits.
 
-- More types. We have [6 types](#types) by now. Long and short (128/64/32-bit),
+- More types. It provides [6 types](#types) by now. Long and short (128/64/32-bit),
 signed and unsigned.
 
 
