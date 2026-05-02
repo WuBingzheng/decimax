@@ -4,7 +4,7 @@ This crate represents decimals accurately by scaling integer in base-10.
 So there is no round-off error like 0.1 + 0.2 != 0.3.
 
 There are kinds of ways to represent decimals, each with its own focus.
-This crate is same kind to [`rust_decimal`](https://docs.rs/rust_decimal),
+This crate is same kind to the most popular [`rust_decimal`](https://docs.rs/rust_decimal),
 but *better*.
 
 

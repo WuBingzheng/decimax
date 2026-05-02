@@ -1,10 +1,11 @@
 We benchmark and compare the most popular decimal crate
 [`rust_decimal`](https://crates.io/crates/rust_decimal) and
-this crate [`lean_decimal`](https://crates.io/crates/lean-decimal).
-They are both fixed-precision and floating-point decimal types.
+this crate [`decimax`](https://crates.io/crates/decimax).
+They are both fixed-size and floating-point decimal types.
 
-The decimal in `rust_decimal` is 128-bit. While `lean_decimal` also supports 64-bit
-and 32-bit types besides 128-bit. Here we use the 128-bit only to compare.
+The decimal in `rust_decimal` is 128-bit signed. While `decimax` also
+supports 64-bit and 32-bit types besides 128-bit, of both signed and
+unsigned. Here we use the 128-bit signed decimal only to compare.
 
 We benchmark `+`, `*` and `/` operations. The `-` is same with `+` so we do not
 benchmark it again.
@@ -17,7 +18,7 @@ Versions:
 - Rust: `cargo 1.93.0 (083ac5135 2025-12-15)`
 - `criterion`: `0.7`
 - `rust_decimal`: `1.40.0`
-- `lean-decimal`: `0.1.0`
+- `decimax`: `0.2.0`
 
 Machines:
 
@@ -25,12 +26,12 @@ Machines:
 - Ubuntu 16.04 @Intel Xeon, 2500 MHZ
 - MacOS 13.5 @Apple M1
 
-The results varied considerably at different Machines.
+The results varied at different Machines.
 You are welcome to run the benchmark on your own computer:
 
 ```bash
-git clone https://github.com/WuBingzheng/lean_decimal.git
-cd lean-decimal
+git clone https://github.com/WuBingzheng/decimax.git
+cd decimax
 cargo bench
 open target/criterion/report/index.html
 ```
@@ -74,7 +75,7 @@ We design 2 test cases to cover the branches:
 1. `pure`, the scales of both operands are equal.
 2. `rescale`, the scales are not equal (we choose 0 and 15). The mantissa of
 two operands increase by a factor of 10 at each step, starting from 1, up to
-the maximum, which is 10^28 for `rust_decimal` and `10^36` for `lean-decimal`.
+the maximum, which is 10^28 for `rust_decimal` and `10^36` for `decimax`.
 During this incremental process, when the value exceeds a threshold, the
 rescale of the first operand will overflow, then we need to find a middle
 scale to rescale both operands.
@@ -92,22 +93,22 @@ There are 4 lines in the chart: 2 crates * 2 test-cases.
 
 Test case 1, `pure`, with same scales,
 
-- `pure:rust-dec` is stable and fast.
+- `pure:rust_decimal` is stable and fast.
 
-- `pure:lean-dec` is stable and even faster (4X faster at AMD, 3ns vs 12ns).
+- `pure:decimax` is stable and even faster (4X faster at AMD, 3ns vs 12ns).
 
 Test case 2, `rescale`, with different scales,
 
-- `rescale:rust-dec` has a jump at x=14. This is where the mantissa exceeds
+- `rescale:rust_decimal` has a jump at x=14. This is where the mantissa exceeds
 the threshold, rescaling would overflow. Before the jump, it is stable; after
 the jump, it becomes unstable and very very slow.
 
-- `rescale:lean-dec` also has a jump but later, at x=22. This is because it
-has more mantissa bits (121 bits vs 96 bits). Before the jump it's about 2X
-faster than `rust_decimal` (4 ns vs 8 ns at AMD CPU), and after the jump
+- `rescale:decimax` also has a jump but later, at x=22. This is because it
+has more mantissa bits (122 bits vs 96 bits). Before the jump it's about 2X
+faster than `rust_decimal` (8 ns vs 16 ns at AMD CPU), and after the jump
 it becomes slower than before but still stable and much faster than `rust_decimal`.
 
-Besides, the two `lean-dec` lines are longer than `rust-dec` because we
+Besides, the two `decimax` lines are longer than `rust_decimal` because we
 have more mantissa bits too.
 
 
@@ -129,10 +130,10 @@ Now let's see the results on 3 machines:
 The y-axis represents execution time in nanoseconds (ns); higher values indicate
 slower performance. The x-axis represents powers of 10 of the mantissa.
 
-- `rust-dec`, There is a jump at x=15, where overflow occurs. Before the jump,
+- `rust_decimal`, There is a jump at x=15, where overflow occurs. Before the jump,
 it's stable, but after the jump it flies to the sky.
 
-- `lean-dec`, The jump is at x=19, later than `rust_decimal`. The reason is
+- `decimax`, The jump is at x=19, later than `rust_decimal`. The reason is
 same with the addition test, because we have more mantissa bits. Before the
 jump, it's stable and 2X faster (6 ns vs 12 ns as AMD CPU) than `rust_decimal`.
 After the jump, it becomes slower than before but still stable and much faster
@@ -161,8 +162,8 @@ For example Dec128(6, 2) / Dec128(12, 2), 6 / 12 is not even, but 60 / 12 is.
 So the result is Dec128(5, 1), which is 0.5 . Unfortunately, it’s not
 possible to know how much to rescale in advance, so we can only rescale as
 much as possible first and then reduce it afterward. For the last example,
-we first rescale the dividend to Dec128(6*10^33, 35), and do the mantissa
-division, 6*10^33 / 12, get 5*10^32, so the decimal result is Dec128(5*10^32, 33).
+we first rescale the dividend to Dec128(6e33, 35), and do the mantissa
+division, 6e33 / 12, get 5e32, so the decimal result is Dec128(5e32, 33).
 This mantissa is too big, and big number is slow. So we need to reduce its
 scale by 32, to make it to Dec128(5, 1). The reducing is also very slow.
 
@@ -183,10 +184,10 @@ Now let's see the results on 3 machines:
 ![divide-by-small-apple result](charts/div-by-small-apple.svg)
 
 For the two `evenly` lines, there is a jump at x=8, as expected. Before the
-jump, `lean-dec` is stable but much slower than `rust-dec`. After the jump,
+jump, `decimax` is stable but much slower than `rust_decimal`. After the jump,
 they perform differently at different machines.
 
-For the two `non-evenly` lines, `lean-dec` is stable and faster.
+For the two `non-evenly` lines, `decimax` is stable and faster.
 
 
 # Benchmark: division by big
@@ -202,6 +203,6 @@ The results are similar with the above one, except that all becomes slower.
 
 # Conclusion
 
-Compared to `rust_decimal`, this crate `lean_decimal` is more stable and much
+Compared to `rust_decimal`, this crate `decimax` is more stable and much
 faster in `+`, `-` and `*` operations. But it's slower in `/`. Division is complex
 so we still has room for optimization.

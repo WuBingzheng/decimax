@@ -7,27 +7,9 @@ use std::str::FromStr;
 
 // rust_decimal
 type RustDec = rust_decimal::prelude::Decimal;
-fn rust_add(a: RustDec, b: RustDec) -> RustDec {
-    black_box(a + b)
-}
-fn rust_mul(a: RustDec, b: RustDec) -> RustDec {
-    black_box(a * b)
-}
-fn rust_div(a: RustDec, b: RustDec) -> RustDec {
-    black_box(a / b)
-}
 
 // decimax
 type MaxDec = decimax::Dec128;
-fn decimax_add(a: MaxDec, b: MaxDec) -> MaxDec {
-    black_box(a + b)
-}
-fn decimax_mul(a: MaxDec, b: MaxDec) -> MaxDec {
-    black_box(a * b)
-}
-fn decimax_div(a: MaxDec, b: MaxDec) -> MaxDec {
-    black_box(a / b)
-}
 
 fn do_bench_add(group: &mut BenchmarkGroup<'_, WallTime>, name: &str, scale: u32, iexp: u32) {
     let man = 10_i128.pow(iexp);
@@ -40,7 +22,7 @@ fn do_bench_add(group: &mut BenchmarkGroup<'_, WallTime>, name: &str, scale: u32
         group.bench_with_input(
             BenchmarkId::new(format!("{name}:rust_decimal"), iexp),
             &(a, b),
-            |b, i| b.iter(|| rust_add(i.0, i.1)),
+            |b, i| b.iter(|| black_box(i.0 + i.1)),
         );
     }
 
@@ -50,14 +32,14 @@ fn do_bench_add(group: &mut BenchmarkGroup<'_, WallTime>, name: &str, scale: u32
     group.bench_with_input(
         BenchmarkId::new(format!("{name}:decimax"), iexp),
         &(a, b),
-        |b, i| b.iter(|| decimax_add(i.0, i.1)),
+        |b, i| b.iter(|| black_box(i.0 + i.1)),
     );
 }
 
 fn bench_add(c: &mut Criterion, machine: &str, sample: usize) {
     let mut group = c.benchmark_group(format!("addition{machine}"));
 
-    for iexp in (0..=31).step_by(sample) {
+    for iexp in (0..=36).step_by(sample) {
         do_bench_add(&mut group, "pure", 0, iexp);
         do_bench_add(&mut group, "rescale", 15, iexp);
     }
@@ -69,19 +51,19 @@ fn bench_add(c: &mut Criterion, machine: &str, sample: usize) {
 fn bench_mul(c: &mut Criterion, machine: &str, sample: usize) {
     let mut group = c.benchmark_group(format!("multiplication{machine}"));
 
-    for i in (0..=31).step_by(sample) {
+    for i in (0..=36).step_by(sample) {
         let man = 10_i128.pow(i) + 13;
 
         if i <= 28 {
             let a = RustDec::from_i128_with_scale(man, i);
             group.bench_with_input(BenchmarkId::new("rust_decimal", i), &(a, a), |b, i| {
-                b.iter(|| rust_mul(i.0, i.1))
+                b.iter(|| black_box(i.0 * i.1))
             });
         }
 
-        let a = MaxDec::from_parts(man, i);
+        let a = MaxDec::from_parts(man, i.min(31));
         group.bench_with_input(BenchmarkId::new("decimax", i), &(a, a), |b, i| {
-            b.iter(|| decimax_mul(i.0, i.1))
+            b.iter(|| black_box(i.0 * i.1))
         });
     }
 
@@ -103,7 +85,7 @@ fn do_bench_div(group: &mut BenchmarkGroup<'_, WallTime>, n_exp: u32, d_exp: u32
         group.bench_with_input(
             BenchmarkId::new(format!("{name}:rust_decimal"), n_exp),
             &(n, d),
-            |b, i| b.iter(|| rust_div(i.0, i.1)),
+            |b, i| b.iter(|| black_box(i.0 / i.1)),
         );
     }
 
@@ -113,13 +95,13 @@ fn do_bench_div(group: &mut BenchmarkGroup<'_, WallTime>, n_exp: u32, d_exp: u32
     group.bench_with_input(
         BenchmarkId::new(format!("{name}:decimax"), n_exp),
         &(n, d),
-        |b, i| b.iter(|| decimax_div(i.0, i.1)),
+        |b, i| b.iter(|| black_box(i.0 / i.1)),
     );
 }
 
 fn bench_div_by_small(c: &mut Criterion, machine: &str, sample: usize) {
     let mut group = c.benchmark_group(format!("division-by-small{machine}"));
-    for i in (0..=31).step_by(sample) {
+    for i in (0..=36).step_by(sample) {
         do_bench_div(&mut group, i, 8, true);
         do_bench_div(&mut group, i, 8, false);
     }
@@ -128,7 +110,7 @@ fn bench_div_by_small(c: &mut Criterion, machine: &str, sample: usize) {
 
 fn bench_div_by_big(c: &mut Criterion, machine: &str, sample: usize) {
     let mut group = c.benchmark_group(format!("division-by-big{machine}"));
-    for i in (0..=31).step_by(sample) {
+    for i in (0..=36).step_by(sample) {
         do_bench_div(&mut group, i, 18, true);
         do_bench_div(&mut group, i, 18, false);
     }
