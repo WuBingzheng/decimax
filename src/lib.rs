@@ -3,6 +3,7 @@
 
 mod convert;
 mod display;
+mod floats;
 mod from_str;
 mod ops;
 
@@ -13,6 +14,7 @@ mod int64;
 use core::fmt::{Debug, Display};
 use core::ops::{Add, AddAssign, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Shr, Sub, SubAssign};
 
+pub use floats::FromFloatError;
 pub use from_str::ParseError;
 
 /// The 128-bit decimal type, with about 36 significant digits and at most 31 fraction digits.
