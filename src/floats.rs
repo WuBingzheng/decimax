@@ -86,18 +86,17 @@ fn decompose_f64(f: f64) -> Result<(u8, u64, i32), FromFloatError> {
     }
 }
 
-/// Convert from `f32`, keeping about 7 significant digits.
-///
-/// # Examples:
-///
-/// ```
-/// use decimax::Dec128;
-/// let a = Dec128::try_from(1.234567_f32).unwrap();
-/// let b = Dec128::from_parts(1234567, 6);
-/// assert_eq!(a, b);
-/// ```
 impl<I: UnderlyingInt, const S: bool> TryFrom<f32> for Decimal<I, S> {
     type Error = FromFloatError;
+
+    /// Convert from `f32`, keeping about 7 significant digits.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// let a = decimax::Dec128::try_from(1.234_f32).unwrap();
+    /// assert_eq!(a.parts(), (1234000, 6));
+    /// ```
     fn try_from(f: f32) -> Result<Self, Self::Error> {
         let (sign, man, exp) = decompose_f32(f)?;
 
@@ -142,21 +141,22 @@ impl<I: UnderlyingInt, const S: bool> TryFrom<f32> for Decimal<I, S> {
     }
 }
 
-/// Convert from `f64`, keeping about 15 significant digits.
-///
-/// This only works for 64-bit and 128-bit decimal types, but not for
-/// 32-bit type, because `f64` has 53 bits mantissa.
-///
-/// # Examples:
-///
-/// ```
-/// use decimax::Dec128;
-/// let a = Dec128::try_from(1234567890.12345_f64).unwrap();
-/// let b = Dec128::from_parts(123456789012345_i128, 5);
-/// assert_eq!(a, b);
-/// ```
 impl<I: BigUnderlyingInt, const S: bool> TryFrom<f64> for Decimal<I, S> {
     type Error = FromFloatError;
+
+    /// Convert from `f64`, keeping about 15 significant digits.
+    ///
+    /// If you do not need so many significant digits, use `f32` instead.
+    ///
+    /// This only works for 64-bit and 128-bit decimal types, but not for
+    /// 32-bit type, because `f64` has 53 bits mantissa.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// let a = decimax::Dec128::try_from(1.234_f64).unwrap();
+    /// assert_eq!(a.parts(), (1234000000000000, 15)); // big mantissa
+    /// ```
     fn try_from(f: f64) -> Result<Self, Self::Error> {
         let (sign, man, exp) = decompose_f64(f)?;
 
@@ -201,6 +201,42 @@ impl<I: BigUnderlyingInt, const S: bool> TryFrom<f64> for Decimal<I, S> {
     }
 }
 
+// Decimal -> floats
+
+impl<I: UnderlyingInt, const S: bool> From<Decimal<I, S>> for f32 {
+    /// Convert decimal to `f32`.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// let f = 12.3456_f32;
+    /// let a = decimax::Dec128::try_from(f).unwrap();
+    /// assert_eq!(f32::from(a), f);
+    /// ```
+    fn from(value: Decimal<I, S>) -> Self {
+        let (sign, scale, man) = value.unpack();
+        let f = man.to_f32() / ALL_EXPS_F32[scale as usize];
+        if sign == 0 { f } else { -f }
+    }
+}
+
+impl<I: UnderlyingInt, const S: bool> From<Decimal<I, S>> for f64 {
+    /// Convert decimal to `f64`.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// let f = 12345678.12345678_f64;
+    /// let a = decimax::Dec128::try_from(f).unwrap();
+    /// assert_eq!(f64::from(a), f);
+    /// ```
+    fn from(value: Decimal<I, S>) -> Self {
+        let (sign, scale, man) = value.unpack();
+        let f = man.to_f64() / ALL_EXPS_F64[scale as usize];
+        if sign == 0 { f } else { -f }
+    }
+}
+
 // 31 = u128::MAX_SCALE
 const ALL_5EXPS: [u128; 32] = [
     1,
@@ -235,4 +271,15 @@ const ALL_5EXPS: [u128; 32] = [
     5_u128.pow(29),
     5_u128.pow(30),
     5_u128.pow(31),
+];
+
+// 31 = u128::MAX_SCALE
+const ALL_EXPS_F32: [f32; 32] = [
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16,
+    1e17, 1e18, 1e19, 1e20, 1e21, 1e22, 1e23, 1e24, 1e25, 1e26, 1e27, 1e28, 1e29, 1e30, 1e31,
+];
+// 31 = u128::MAX_SCALE
+const ALL_EXPS_F64: [f64; 32] = [
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16,
+    1e17, 1e18, 1e19, 1e20, 1e21, 1e22, 1e23, 1e24, 1e25, 1e26, 1e27, 1e28, 1e29, 1e30, 1e31,
 ];

@@ -110,6 +110,10 @@ pub trait UnderlyingInt:
     fn as_u32(self) -> u32;
     fn from_u32(n: u32) -> Self;
 
+    // to convert to f32/f64
+    fn to_f32(self) -> f32;
+    fn to_f64(self) -> f64;
+
     fn leading_zeros(self) -> u32;
 
     // caller has made sure that no overflow

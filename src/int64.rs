@@ -31,6 +31,13 @@ impl UnderlyingInt for u64 {
         n as Self
     }
 
+    fn to_f32(self) -> f32 {
+        self as f32
+    }
+    fn to_f64(self) -> f64 {
+        self as f64
+    }
+
     fn leading_zeros(self) -> u32 {
         self.leading_zeros()
     }
