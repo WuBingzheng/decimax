@@ -1,4 +1,4 @@
-use crate::{Decimal, UnderlyingInt};
+use crate::{Decimal, UnderlyingInt, bits_to_digits};
 
 /// Only for `u64` and `u128`, but no `u32`.
 ///
@@ -96,6 +96,11 @@ impl<I: UnderlyingInt, const S: bool> TryFrom<f32> for Decimal<I, S> {
     /// ```
     /// let a = decimax::Dec128::try_from(1.234_f32).unwrap();
     /// assert_eq!(a.parts(), (1234000, 6));
+    ///
+    /// // It may loss precision for small numbers.
+    /// // For example Dec32 has 7 fraction precision at most.
+    /// let a = decimax::Dec32::try_from(5.123e-7_f32).unwrap();
+    /// assert_eq!(a, decimax::Dec32::from_parts(5, 7));
     /// ```
     fn try_from(f: f32) -> Result<Self, Self::Error> {
         let (sign, man, exp) = decompose_f32(f)?;
@@ -106,24 +111,21 @@ impl<I: UnderlyingInt, const S: bool> TryFrom<f32> for Decimal<I, S> {
 
         let (man10, scale) = if exp < 0 {
             // exp < 0: man10 = (man2 * 10^scale) >> -exp
-            let scale = -exp * 1233 >> 12;
-            if scale as u32 > I::MAX_SCALE {
+            let exp = (-exp) as u32;
+
+            let scale = bits_to_digits(exp).min(I::MAX_SCALE);
+
+            // calculate: man_scale = (man * 10^scale) >> exp
+            //                      = (man * 5^scale) >> (exp - scale)
+            //
+            // Tha @man has 24 bits, the max of @ALL_5EXPS has 72 bits,
+            // so the multiplication will not overflow.
+            let man10 = round_mul_shl(man as u128, ALL_5EXPS[scale as usize], exp - scale);
+            if man10 == 0 {
                 return Err(FromFloatError::Underflow);
             }
 
-            // calculate: man_scale_1 = (man * 10^scale) >> (-exp - 1)
-            //                        = (man * 5^scale) >> (-exp - scale - 1)
-            //
-            // Tha @man takes 24 bits.
-            // The max of @pow5, ALL_5EXPS[u128::MAX_SCALE], takes 72 bits.
-            // So the multiplication will not overflow.
-            let pow5 = ALL_5EXPS[scale as usize];
-            let man_scaled_1 = ((man as u128 * pow5) >> (-exp - scale - 1)) as u32;
-
-            let man_scaled = man_scaled_1 >> 1;
-            let round = if man_scaled_1 & 1 == 1 { 1 } else { 0 };
-
-            (I::from_u32(man_scaled + round), scale as u32)
+            (I::from_u32(man10 as u32), scale)
         } else if exp == 0 {
             // integer, no scale
             (I::from_u32(man), 0)
@@ -166,24 +168,20 @@ impl<I: BigUnderlyingInt, const S: bool> TryFrom<f64> for Decimal<I, S> {
 
         let (man10, scale) = if exp < 0 {
             // exp < 0: man10 = (man2 * 10^scale) >> -exp
-            let scale = -exp * 1233 >> 12;
-            if scale as u32 > I::MAX_SCALE {
+            let exp = (-exp) as u32;
+            let scale = bits_to_digits(exp).min(I::MAX_SCALE);
+
+            // calculate: man_scale = (man * 10^scale) >> exp
+            //                      = (man * 5^scale) >> (exp - scale)
+            //
+            // Tha @man has 53 bits, the max of @ALL_5EXPS has 72 bits,
+            // so the multiplication will not overflow. What a luck!
+            let man10 = round_mul_shl(man as u128, ALL_5EXPS[scale as usize], exp - scale);
+            if man10 == 0 {
                 return Err(FromFloatError::Underflow);
             }
 
-            // calculate: man_scale_1 = (man * 10^scale) >> (-exp - 1)
-            //                        = (man * 5^scale) >> (-exp - scale - 1)
-            //
-            // Tha @man takes 53 bits.
-            // The max of @pow5, ALL_5EXPS[u128::MAX_SCALE], takes 72 bits.
-            // 53 + 72 = 125. So the multiplication will not overflow. What a luck!
-            let pow5 = ALL_5EXPS[scale as usize];
-            let man_scaled_1 = ((man as u128 * pow5) >> (-exp - scale - 1)) as u64;
-
-            let man_scaled = man_scaled_1 >> 1;
-            let round = if man_scaled_1 & 1 == 1 { 1 } else { 0 };
-
-            (I::from_u64(man_scaled + round), scale as u32)
+            (I::from_u64(man10 as u64), scale)
         } else if exp == 0 {
             // integer, no scale
             (I::from_u64(man), 0)
@@ -191,7 +189,7 @@ impl<I: BigUnderlyingInt, const S: bool> TryFrom<f64> for Decimal<I, S> {
             // exp > 0: man10 = man2 << exp
             let exp = exp as u32;
 
-            if exp + 24 > I::BITS - I::SCALE_BITS - S as u32 {
+            if exp + 53 > I::BITS - I::SCALE_BITS - S as u32 {
                 return Err(FromFloatError::Overflow);
             }
             (I::from_u64(man) << exp, 0)
@@ -199,6 +197,15 @@ impl<I: BigUnderlyingInt, const S: bool> TryFrom<f64> for Decimal<I, S> {
 
         Ok(Decimal::pack(sign, scale, man10))
     }
+}
+
+// Calculate round: (n * m) >> sh
+// The caller should make sure no overflow.
+fn round_mul_shl(n: u128, m: u128, sh: u32) -> u128 {
+    let p1 = (n * m) >> (sh - 1);
+    let p0 = p1 >> 1;
+    let round = if p1 & 1 == 1 { 1 } else { 0 };
+    p0 + round
 }
 
 // Decimal -> floats

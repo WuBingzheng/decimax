@@ -70,6 +70,9 @@ where
     check_format(n);
     check_format(d);
 
+    check_floats_signed(n);
+    check_floats_signed(d);
+
     Some(())
 }
 
@@ -124,6 +127,9 @@ where
     check_format(n);
     check_format(d);
 
+    check_floats_unsigned(n);
+    check_floats_unsigned(d);
+
     Some(())
 }
 
@@ -166,4 +172,50 @@ where
         Ok(n2) => assert_eq!(n2, n.round_to(4)),
         Err(err) => assert_eq!(err, ParseError::Overflow),
     }
+}
+
+fn check_floats_signed<I>(n: Decimal<I, true>)
+where
+    I: UnderlyingInt,
+{
+    let f = f32::from(n);
+    // dbg!(n, f);
+    let Ok(n2) = Decimal::try_from(f) else {
+        let diff = if n.is_positive() {
+            Decimal::<I, true>::MAX - n
+        } else {
+            Decimal::<I, true>::MIN - n
+        };
+        assert!(f32::from(diff / n) < 1e-7);
+        return;
+    };
+
+    if n == n2 {
+        return;
+    }
+
+    let diff = if n > n2 { n - n2 } else { n2 - n };
+    let rate = f32::from(diff / n);
+    assert!(rate < 1e-6);
+}
+
+fn check_floats_unsigned<I>(n: Decimal<I, false>)
+where
+    I: UnderlyingInt,
+{
+    let f = f32::from(n);
+    // dbg!(n, f);
+    let Ok(n2) = Decimal::try_from(f) else {
+        let diff = Decimal::<I, false>::MAX - n;
+        assert!(f32::from(diff / n) < 1e-7);
+        return;
+    };
+
+    if n == n2 {
+        return;
+    }
+
+    let diff = if n > n2 { n - n2 } else { n2 - n };
+    let rate = f32::from(diff / n);
+    assert!(rate < 1e-6);
 }
