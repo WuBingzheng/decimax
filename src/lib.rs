@@ -21,33 +21,18 @@ pub use from_str::ParseError;
 pub type Dec128 = Decimal<u128, true>;
 
 /// The 128-bit unsigned decimal type, with about 36 significant digits and at most 31 fraction digits.
-///
-/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
-/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type UDec128 = Decimal<u128, false>;
 
 /// The 64-bit decimal type, with about 18 significant digits and at most 15 fraction digits.
-///
-/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
-/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type Dec64 = Decimal<u64, true>;
 
 /// The 64-bit unsigned decimal type, with about 18 significant digits and at most 15 fraction digits.
-///
-/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
-/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type UDec64 = Decimal<u64, false>;
 
 /// The 32-bit decimal type, with about 9 significant digits and at most 7 fraction digits.
-///
-/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
-/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type Dec32 = Decimal<u32, true>;
 
 /// The 32-bit unsigned decimal type, with about 9 significant digits and at most 7 fraction digits.
-///
-/// Since cargo generates full documentation only for the first alias ([`Dec128`]),
-/// here is almost empty. See the [`Decimal`] page for full documentation of this alias.
 pub type UDec32 = Decimal<u32, false>;
 
 /// The decimal type.

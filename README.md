@@ -91,9 +91,10 @@ are objective. Please check it out and run it yourself.
 use decimax::{Dec128, UDec32};
 use core::str::FromStr;
 
-// Construct from integer and string, while the float is in process.
+// Construct from integer, float, or string.
 let a = Dec128::from(123);
-let b = Dec128::from_str("123.456").unwrap();
+let b = Dec128::try_from(123.456).unwrap();
+let c = Dec128::from_str("123.456").unwrap();
 
 // Construct from mantissa and scale.
 let b2 = Dec128::from_parts(123456, 3);
