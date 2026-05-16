@@ -1,3 +1,7 @@
+# v0.3.0 (2026-05-16)
+
+- Add convertion between decimal and floats.
+
 # v0.2.0 (2026-05-02)
 
 - Rename from `lean-decimal` to `decimax` !

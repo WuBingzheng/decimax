@@ -96,7 +96,7 @@ let a = Dec128::from(123);
 let b = Dec128::try_from(123.456).unwrap();
 let c = Dec128::from_str("123.456").unwrap();
 
-// Construct from mantissa and scale.
+// Construct from mantissa and scale. This is low level.
 let b2 = Dec128::from_parts(123456, 3);
 assert_eq!(b, b2);
 
