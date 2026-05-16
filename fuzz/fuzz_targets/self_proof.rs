@@ -4,7 +4,7 @@ use libfuzzer_sys::fuzz_target;
 use std::num::ParseIntError;
 use std::str::FromStr;
 
-use decimax::{Decimal, ParseError, UnderlyingInt};
+use decimax::{BigUnderlyingInt, Decimal, ParseError, UnderlyingInt};
 
 #[derive(Debug, arbitrary::Arbitrary)]
 struct Data {
@@ -43,6 +43,16 @@ fuzz_target!(|data: Data| {
         data.d_man32 as u32,
         data.d_scale,
     );
+
+    check_f64_signed::<u128>(data.n_man128, data.n_scale);
+    check_f64_signed::<u128>(data.d_man128, data.d_scale);
+    check_f64_signed::<u64>(data.n_man64, data.n_scale);
+    check_f64_signed::<u64>(data.d_man64, data.d_scale);
+
+    check_f64_unsigned::<u128>(data.n_man128 as u128, data.n_scale);
+    check_f64_unsigned::<u128>(data.d_man128 as u128, data.d_scale);
+    check_f64_unsigned::<u64>(data.n_man64 as u64, data.n_scale);
+    check_f64_unsigned::<u64>(data.d_man64 as u64, data.d_scale);
 });
 
 fn test_signed<I>(n_man: I::Signed, n_scale: u32, d_man: I::Signed, d_scale: u32) -> Option<()>
@@ -70,8 +80,8 @@ where
     check_format(n);
     check_format(d);
 
-    check_floats_signed(n);
-    check_floats_signed(d);
+    check_f32_signed(n);
+    check_f32_signed(d);
 
     Some(())
 }
@@ -127,8 +137,8 @@ where
     check_format(n);
     check_format(d);
 
-    check_floats_unsigned(n);
-    check_floats_unsigned(d);
+    check_f32_unsigned(n);
+    check_f32_unsigned(d);
 
     Some(())
 }
@@ -174,7 +184,7 @@ where
     }
 }
 
-fn check_floats_signed<I>(n: Decimal<I, true>)
+fn check_f32_signed<I>(n: Decimal<I, true>)
 where
     I: UnderlyingInt,
 {
@@ -199,7 +209,7 @@ where
     assert!(rate < 1e-6);
 }
 
-fn check_floats_unsigned<I>(n: Decimal<I, false>)
+fn check_f32_unsigned<I>(n: Decimal<I, false>)
 where
     I: UnderlyingInt,
 {
@@ -218,4 +228,60 @@ where
     let diff = if n > n2 { n - n2 } else { n2 - n };
     let rate = f32::from(diff / n);
     assert!(rate < 1e-6);
+}
+
+fn check_f64_signed<I>(n_man: I::Signed, n_scale: u32)
+where
+    I: BigUnderlyingInt,
+{
+    let n_scale = n_scale % (I::MAX_SCALE + 1);
+    let Some(n) = Decimal::<I, true>::try_from_parts(n_man, n_scale) else {
+        return;
+    };
+
+    let f = f64::from(n);
+    // dbg!(n, f);
+    let Ok(n2) = Decimal::try_from(f) else {
+        let diff = if n.is_positive() {
+            Decimal::<I, true>::MAX - n
+        } else {
+            Decimal::<I, true>::MIN - n
+        };
+        assert!(f64::from(diff / n) < 1e-15);
+        return;
+    };
+
+    if n == n2 {
+        return;
+    }
+
+    let diff = if n > n2 { n - n2 } else { n2 - n };
+    let rate = f64::from(diff / n);
+    assert!(rate < 1e-14);
+}
+
+fn check_f64_unsigned<I>(n_man: I, n_scale: u32)
+where
+    I: BigUnderlyingInt,
+{
+    let n_scale = n_scale % (I::MAX_SCALE + 1);
+    let Some(n) = Decimal::<I, false>::try_from_parts(n_man, n_scale) else {
+        return;
+    };
+
+    let f = f64::from(n);
+    // dbg!(n, f);
+    let Ok(n2) = Decimal::try_from(f) else {
+        let diff = Decimal::<I, false>::MAX - n;
+        assert!(f64::from(diff / n) < 1e-15);
+        return;
+    };
+
+    if n == n2 {
+        return;
+    }
+
+    let diff = if n > n2 { n - n2 } else { n2 - n };
+    let rate = f64::from(diff / n);
+    assert!(rate < 1e-14);
 }
